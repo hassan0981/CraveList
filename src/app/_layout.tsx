@@ -12,6 +12,15 @@ import {
 import { ThemeContextProvider, useTheme } from '@/context/ThemeContext';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { StatusBar } from 'expo-status-bar';
+import * as Sentry from '@sentry/react-native';
+
+Sentry.init({
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN || '',
+  tracesSampleRate: 1.0,
+  _experiments: {
+    profilesSampleRate: 1.0,
+  },
+});
 
 SplashScreen.preventAutoHideAsync();
 
@@ -116,7 +125,7 @@ function RootNavigator() {
   );
 }
 
-export default function RootLayout() {
+function RootLayout() {
   const [fontsLoaded] = useFonts({
     SpaceGrotesk_400Regular,
     SpaceGrotesk_500Medium,
@@ -142,3 +151,5 @@ export default function RootLayout() {
     </ThemeContextProvider>
   );
 }
+
+export default Sentry.wrap(RootLayout);
