@@ -3,8 +3,8 @@ import { createClient } from '@supabase/supabase-js';
 import { SavedPlaceRow } from '@/types/database';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://lqvqizbfzsplkdabgqik.supabase.co';
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-const adminClient = createClient(supabaseUrl, serviceKey);
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const adminClient = serviceKey ? createClient(supabaseUrl, serviceKey) : supabase;
 
 /**
  * Service for managing user's saved places in Supabase 'saved_places' table.

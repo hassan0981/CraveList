@@ -1,3 +1,4 @@
+import { supabase } from '@/lib/supabase';
 import { createClient } from '@supabase/supabase-js';
 import { PlanRow, PlanMemberRow } from '@/types/database';
 
@@ -15,8 +16,8 @@ function getSupabaseRealtime() {
 }
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://lqvqizbfzsplkdabgqik.supabase.co';
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-const adminClient = createClient(supabaseUrl, serviceKey);
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const adminClient = serviceKey ? createClient(supabaseUrl, serviceKey) : supabase;
 
 async function schedulePlanReminders(planTitle: string, plannedAtIso: string, spotName: string) {
   try {
