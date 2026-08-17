@@ -153,12 +153,15 @@ export default function PlansScreen() {
 
     if (error) {
       alert(error);
-    } else {
+    } else if (newPlan) {
       setShowCreateModal(false);
-      // Reset form
+      // Reset form fields
       setTitle('');
       setDescription('');
       setSelectedFriendIds([]);
+
+      // Optimistically prepend created plan to list immediately!
+      setPlans((prev) => [newPlan, ...prev]);
       await fetchPlans();
     }
   };
