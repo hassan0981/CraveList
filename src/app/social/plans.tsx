@@ -292,39 +292,52 @@ export default function PlansScreen() {
         <View style={styles.modalOverlay}>
           <View style={[styles.modalCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.modalHeader}>
-              <CraveText variant="h2">Create Dining Plan</CraveText>
-              <TouchableOpacity onPress={() => setShowCreateModal(false)}>
-                <Ionicons name="close" size={22} color={colors.primaryText} />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={[styles.modalIconBg, { backgroundColor: colors.badgeBg }]}>
+                  <Ionicons name="calendar-sharp" size={20} color={colors.primary} />
+                </View>
+                <View>
+                  <CraveText variant="h2">Plan a Dining Meetup</CraveText>
+                  <CraveText variant="caption" color={colors.secondaryText}>
+                    Set date, pick spot, and invite your food circle
+                  </CraveText>
+                </View>
+              </View>
+              <TouchableOpacity onPress={() => setShowCreateModal(false)} style={styles.closeBtn}>
+                <Ionicons name="close" size={20} color={colors.primaryText} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 460 }}>
-              {/* Form Field 1: Title */}
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
+              {/* Form Section 1: Title */}
               <View style={styles.formGroup}>
-                <CraveText variant="caption" color={colors.secondaryText}>
-                  PLAN TITLE *
+                <CraveText variant="caption" color={colors.primary} style={styles.fieldLabel}>
+                  1. MEETUP TITLE *
                 </CraveText>
                 <TextInput
                   style={[styles.input, { backgroundColor: colors.background, color: colors.primaryText, borderColor: colors.border }]}
-                  placeholder="e.g. Saturday Italian Dinner"
+                  placeholder="e.g. Weekend Pizza & Coffee Catchup"
                   placeholderTextColor={colors.mutedText}
                   value={title}
                   onChangeText={setTitle}
                 />
               </View>
 
-              {/* Form Field 2: Restaurant Spot with Search Bar */}
+              {/* Form Section 2: Restaurant Spot Finder */}
               <View style={styles.formGroup}>
-                <CraveText variant="caption" color={colors.secondaryText}>
-                  SEARCH & CHOOSE DINING SPOT
+                <CraveText variant="caption" color={colors.primary} style={styles.fieldLabel}>
+                  2. SEARCH & SELECT RESTAURANT SPOT
                 </CraveText>
-                <TextInput
-                  style={[styles.input, { backgroundColor: colors.background, color: colors.primaryText, borderColor: colors.border }]}
-                  placeholder="🔍 Type to search restaurant (e.g. Howdy, Rina, Ramen)..."
-                  placeholderTextColor={colors.mutedText}
-                  value={spotSearchQuery}
-                  onChangeText={setSpotSearchQuery}
-                />
+                <View style={[styles.searchBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                  <Ionicons name="search-outline" size={16} color={colors.mutedText} style={{ marginRight: 6 }} />
+                  <TextInput
+                    style={{ flex: 1, color: colors.primaryText, fontSize: 13, height: 38 }}
+                    placeholder="Search Howdy, Rina, Ramen, Coffee..."
+                    placeholderTextColor={colors.mutedText}
+                    value={spotSearchQuery}
+                    onChangeText={setSpotSearchQuery}
+                  />
+                </View>
                 {filteredSpots.length > 0 ? (
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 4 }}>
                     {filteredSpots.map((spot) => {
@@ -341,6 +354,12 @@ export default function PlansScreen() {
                             },
                           ]}
                         >
+                          <Ionicons
+                            name={isSelected ? 'location' : 'location-outline'}
+                            size={14}
+                            color={isSelected ? '#FFFFFF' : colors.primary}
+                            style={{ marginRight: 4 }}
+                          />
                           <CraveText variant="caption" color={isSelected ? '#FFFFFF' : colors.primaryText}>
                             {spot.name}
                           </CraveText>
@@ -350,22 +369,22 @@ export default function PlansScreen() {
                   </ScrollView>
                 ) : (
                   <CraveText variant="caption" color={colors.mutedText}>
-                    No matching restaurant spots found for "{spotSearchQuery}".
+                    No matching restaurant spots found.
                   </CraveText>
                 )}
               </View>
 
-              {/* Form Field 3: Custom Date & Time Frame */}
+              {/* Form Section 3: Dedicated Date Selector */}
               <View style={styles.formGroup}>
-                <CraveText variant="caption" color={colors.secondaryText}>
-                  DATE & TIME OF MEETUP
+                <CraveText variant="caption" color={colors.primary} style={styles.fieldLabel}>
+                  3. SELECT DATE 📅
                 </CraveText>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 4 }}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 2 }}>
                   {[
-                    { key: 'tonight', label: 'Tonight (8:00 PM)' },
-                    { key: 'tomorrow', label: 'Tomorrow (7:30 PM)' },
-                    { key: 'saturday', label: 'Saturday (8:00 PM)' },
-                    { key: 'custom', label: '✍️ Custom Date/Time' },
+                    { key: 'tonight', label: 'Today' },
+                    { key: 'tomorrow', label: 'Tomorrow' },
+                    { key: 'saturday', label: 'This Saturday' },
+                    { key: 'custom', label: '✍️ Pick Date' },
                   ].map((opt) => (
                     <TouchableOpacity
                       key={opt.key}
@@ -388,7 +407,7 @@ export default function PlansScreen() {
                 {plannedTimeOption === 'custom' && (
                   <TextInput
                     style={[styles.input, { backgroundColor: colors.background, color: colors.primaryText, borderColor: colors.border, marginTop: 4 }]}
-                    placeholder="e.g. 2026-08-22 20:30 (YYYY-MM-DD HH:MM)"
+                    placeholder="Enter Date (e.g. 2026-08-25)"
                     placeholderTextColor={colors.mutedText}
                     value={customDateString}
                     onChangeText={setCustomDateString}
@@ -396,10 +415,30 @@ export default function PlansScreen() {
                 )}
               </View>
 
-              {/* Form Field 4: Invite Friends */}
+              {/* Form Section 4: Dedicated Time Selector */}
               <View style={styles.formGroup}>
-                <CraveText variant="caption" color={colors.secondaryText}>
-                  INVITE FRIENDS ({selectedFriendIds.length} Selected)
+                <CraveText variant="caption" color={colors.primary} style={styles.fieldLabel}>
+                  4. SELECT TIME ⏰
+                </CraveText>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 2 }}>
+                  {['7:00 PM (Dinner)', '8:00 PM (Prime)', '9:00 PM (Late)', '1:30 PM (Lunch)'].map((timeLabel) => (
+                    <View
+                      key={timeLabel}
+                      style={[styles.chip, { backgroundColor: colors.badgeBg, borderColor: colors.border }]}
+                    >
+                      <Ionicons name="time-outline" size={13} color={colors.primary} style={{ marginRight: 4 }} />
+                      <CraveText variant="caption" color={colors.primaryText}>
+                        {timeLabel}
+                      </CraveText>
+                    </View>
+                  ))}
+                </ScrollView>
+              </View>
+
+              {/* Form Section 5: Invite Friends */}
+              <View style={styles.formGroup}>
+                <CraveText variant="caption" color={colors.primary} style={styles.fieldLabel}>
+                  5. INVITE FOOD CIRCLE FRIENDS ({selectedFriendIds.length} Invited)
                 </CraveText>
                 {friendsList.length > 0 ? (
                   <View style={{ gap: 6, marginTop: 4 }}>
@@ -417,10 +456,13 @@ export default function PlansScreen() {
                             },
                           ]}
                         >
-                          <CraveText variant="bodyBold">{f.display_name || 'Friend'}</CraveText>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                            <Ionicons name="person-circle-outline" size={24} color={colors.primary} />
+                            <CraveText variant="bodyBold">{f.display_name || 'Friend'}</CraveText>
+                          </View>
                           <Ionicons
                             name={isInvited ? 'checkmark-circle' : 'ellipse-outline'}
-                            size={20}
+                            size={22}
                             color={isInvited ? colors.primary : colors.mutedText}
                           />
                         </TouchableOpacity>
@@ -429,19 +471,19 @@ export default function PlansScreen() {
                   </View>
                 ) : (
                   <CraveText variant="caption" color={colors.mutedText}>
-                    Add friends in Food Circle to invite them to dining meetups.
+                    Add friends in your Food Circle to invite them!
                   </CraveText>
                 )}
               </View>
 
-              {/* Form Field 5: Description */}
+              {/* Form Section 6: Note / Description */}
               <View style={styles.formGroup}>
-                <CraveText variant="caption" color={colors.secondaryText}>
-                  NOTE / DESCRIPTION (OPTIONAL)
+                <CraveText variant="caption" color={colors.secondaryText} style={styles.fieldLabel}>
+                  6. NOTE / INSTRUCTIONS (OPTIONAL)
                 </CraveText>
                 <TextInput
                   style={[styles.input, { backgroundColor: colors.background, color: colors.primaryText, borderColor: colors.border }]}
-                  placeholder="e.g. Celebrating exam completion! Meet by the entrance."
+                  placeholder="e.g. Meet by the entrance at 8 PM!"
                   placeholderTextColor={colors.mutedText}
                   value={description}
                   onChangeText={setDescription}
@@ -449,9 +491,9 @@ export default function PlansScreen() {
               </View>
             </ScrollView>
 
-            <View style={{ marginTop: 16 }}>
+            <View style={{ marginTop: 12 }}>
               <AppButton
-                title={creating ? 'Saving Plan...' : 'Confirm & Save Plan'}
+                title={creating ? 'Saving Dining Plan...' : '🎉 Create & Send Invitations'}
                 onPress={handleCreatePlanSubmit}
                 variant="primary"
                 size="medium"
@@ -517,7 +559,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: 12,
+  },
+  modalIconBg: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeBtn: {
+    padding: 6,
+    borderRadius: 16,
+  },
+  fieldLabel: {
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 4,
   },
   formGroup: {
     marginBottom: 14,
@@ -531,6 +597,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
