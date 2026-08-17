@@ -27,30 +27,30 @@ async function schedulePlanReminders(planTitle: string, plannedAtIso: string, sp
     const twelveHoursMs = 12 * 60 * 60 * 1000;
     const sixHoursMs = 6 * 60 * 60 * 1000;
 
-    const t12Time = new Date(eventTime - twelveHoursMs);
-    const t6Time = new Date(eventTime - sixHoursMs);
+    const t12Sec = Math.floor((eventTime - twelveHoursMs - now) / 1000);
+    const t6Sec = Math.floor((eventTime - sixHoursMs - now) / 1000);
 
-    if (t12Time.getTime() > now) {
+    if (t12Sec > 0) {
       await Notifications.scheduleNotificationAsync({
         content: {
           title: `🍽️ Dining Plan Reminder (12h)`,
           body: `Reminder: "${planTitle}" at ${spotName} is coming up in 12 hours!`,
         },
-        trigger: { date: t12Time } as any,
+        trigger: { seconds: t12Sec } as any,
       });
     }
 
-    if (t6Time.getTime() > now) {
+    if (t6Sec > 0) {
       await Notifications.scheduleNotificationAsync({
         content: {
           title: `🍽️ Dining Plan Reminder (6h)`,
           body: `Get ready! "${planTitle}" at ${spotName} is starting in 6 hours!`,
         },
-        trigger: { date: t6Time } as any,
+        trigger: { seconds: t6Sec } as any,
       });
     }
   } catch (err) {
-    console.warn('[planService] Error scheduling local push reminders:', err);
+    console.warn('[planService] Note on local push reminders:', err);
   }
 }
 
