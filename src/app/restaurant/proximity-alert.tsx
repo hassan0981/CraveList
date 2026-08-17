@@ -1,16 +1,62 @@
-import React from 'react';
-import { Image, StyleSheet, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Image, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { AppButton } from '@/components/AppButton';
 import { CraveText } from '@/components/CraveText';
-import { mockRestaurants } from '@/constants/mockData';
 import { useTheme } from '@/context/ThemeContext';
+import { useAuth } from '@/context/AuthContext';
 import { RootNavigation } from '@/navigation';
+import { locationService } from '@/services/locationService';
+import { ProximityMatch } from '@/services/proximityService';
 
 export default function ProximityAlertScreen() {
   const { colors } = useTheme();
+  const { user } = useAuth();
 
-  const restaurant = mockRestaurants[0]; // Osteria Del Corso (250m away)
+  const [loading, setLoading] = useState(true);
+  const [match, setMatch] = useState<ProximityMatch | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadNearbySpot() {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const coords = await locationService.getCurrentLocation();
+        const lat = coords?.latitude || 31.5204;
+        const lng = coords?.longitude || 74.3587;
+
+        const matches = await locationService.getNearbySavedPlaces(lat, lng, user.id);
+        if (isMounted && matches.length > 0) {
+          setMatch(matches[0]);
+        }
+      } catch (err) {
+        console.error('[ProximityAlertScreen] Error loading nearby spot:', err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+
+    loadNearbySpot();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
+
+  const targetRest = match?.matchedBranch;
+  const restId = targetRest?.id || 'rest_1';
+  const restName = targetRest?.name || 'Saved Craving Spot';
+  const restAddress = targetRest?.address || 'Lahore, Pakistan';
+  const restImage = targetRest?.image_url || 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=800&q=80';
+  const distanceText = match?.distanceFormatted || '320m away';
+  const personalNote = match?.savedBrandName ? `Craving for brand: ${match.savedBrandName}` : 'Craving from your saved list';
 
   return (
     <View style={styles.backdrop}>
@@ -22,41 +68,42 @@ export default function ProximityAlertScreen() {
         </View>
 
         <CraveText variant="h2" align="center">
-          📍 YOU'RE NEAR A CRAVING
+          📍 NEARBY CRAVING ALERT
         </CraveText>
 
-        <CraveText variant="body" align="center" color={colors.secondaryText}>
-          You are only <CraveText variant="bodyBold" color={colors.primary}>{restaurant.distance}</CraveText> away from a spot you saved {restaurant.savedDate ? `on ${restaurant.savedDate}` : 'recently'}!
-        </CraveText>
+        {loading ? (
+          <ActivityIndicator size="small" color={colors.primary} />
+        ) : (
+          <>
+            <CraveText variant="body" align="center" color={colors.secondaryText}>
+              You are only <CraveText variant="bodyBold" color={colors.primary}>{distanceText}</CraveText> from a saved restaurant!
+            </CraveText>
 
-        <View style={[styles.restaurantPreview, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Image source={{ uri: restaurant.image }} style={styles.previewImage} />
-          <View style={styles.previewTextGroup}>
-            <CraveText variant="title">{restaurant.name}</CraveText>
-            <CraveText variant="caption" color={colors.secondaryText}>
-              {restaurant.category}
-            </CraveText>
-            <CraveText variant="caption" color={colors.primary}>
-              📍 250m away • {restaurant.address}
-            </CraveText>
-          </View>
-        </View>
+            <View style={[styles.restaurantPreview, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Image source={{ uri: restImage }} style={styles.previewImage} />
+              <View style={styles.previewTextGroup}>
+                <CraveText variant="title">{restName}</CraveText>
+                <CraveText variant="caption" color={colors.primary}>
+                  📍 {distanceText} • {restAddress}
+                </CraveText>
+              </View>
+            </View>
 
-        {restaurant.personalNote && (
-          <View style={[styles.noteSnippetBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <CraveText variant="caption" color={colors.primary} style={styles.boldText}>
-              Why You Saved It:
-            </CraveText>
-            <CraveText variant="caption" color={colors.primaryText} numberOfLines={2} style={styles.italicText}>
-              "{restaurant.personalNote}"
-            </CraveText>
-          </View>
+            <View style={[styles.noteSnippetBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <CraveText variant="caption" color={colors.primary} style={styles.boldText}>
+                Why You Saved It:
+              </CraveText>
+              <CraveText variant="caption" color={colors.primaryText} numberOfLines={2} style={styles.italicText}>
+                "{personalNote}"
+              </CraveText>
+            </View>
+          </>
         )}
 
         <View style={styles.actionColumn}>
           <AppButton
             title="View Place Details"
-            onPress={() => RootNavigation.toRestaurantDetails(restaurant.id)}
+            onPress={() => RootNavigation.toRestaurantDetails(restId)}
             variant="primary"
             size="large"
             fullWidth
@@ -65,7 +112,7 @@ export default function ProximityAlertScreen() {
 
           <AppButton
             title="Check In Now"
-            onPress={() => RootNavigation.toVisitCheckin(restaurant.id)}
+            onPress={() => RootNavigation.toVisitCheckin(restId)}
             variant="visited"
             size="medium"
             fullWidth

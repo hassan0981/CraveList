@@ -1,10 +1,45 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/context/ThemeContext';
+import { useAuth } from '@/context/AuthContext';
+import { notificationService } from '@/services/notificationService';
 
 export default function MainLayout() {
   const { colors } = useTheme();
+  const { user } = useAuth();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadCount() {
+      if (!user) {
+        setUnreadCount(0);
+        return;
+      }
+      const count = await notificationService.getUnreadCount(user.id);
+      if (isMounted) setUnreadCount(count);
+    }
+
+    loadCount();
+
+    const interval = setInterval(() => {
+      if (isMounted) loadCount();
+    }, 4000);
+
+    const unsubscribe = user
+      ? notificationService.subscribeToNotifications(user.id, () => {
+          if (isMounted) loadCount();
+        })
+      : () => {};
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+      unsubscribe();
+    };
+  }, [user]);
 
   return (
     <Tabs
@@ -72,6 +107,13 @@ export default function MainLayout() {
         name="friends"
         options={{
           title: 'Friends',
+          tabBarBadge: unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : undefined,
+          tabBarBadgeStyle: {
+            backgroundColor: colors.primary,
+            color: '#FFFFFF',
+            fontSize: 10,
+            fontFamily: 'SpaceGrotesk_700Bold',
+          },
           tabBarIcon: ({ focused, color, size }) => (
             <Ionicons
               name={focused ? 'people' : 'people-outline'}

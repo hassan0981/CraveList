@@ -20,7 +20,10 @@ export const NotificationCard: React.FC<NotificationCardProps> = ({ notification
       case 'friend_save':
         return { name: 'bookmark' as const, color: colors.visited };
       case 'plan_invite':
+      case 'plan_update':
         return { name: 'calendar' as const, color: colors.primarySoft };
+      case 'friend_request':
+        return { name: 'person-add' as const, color: colors.primary };
       default:
         return { name: 'notifications' as const, color: colors.primary };
     }
@@ -35,18 +38,18 @@ export const NotificationCard: React.FC<NotificationCardProps> = ({ notification
       style={[
         styles.container,
         {
-          backgroundColor: notification.read ? colors.cardBackground : colors.surface,
-          borderColor: colors.border,
+          backgroundColor: notification.read ? colors.surface : colors.elevatedSurface,
+          borderColor: notification.read ? colors.border : colors.primary,
         },
       ]}
     >
-      <View style={[styles.iconCircle, { backgroundColor: colors.badgeBg }]}>
-        <Ionicons name={iconInfo.name} size={18} color={iconInfo.color} />
+      <View style={[styles.iconCircle, { backgroundColor: notification.read ? colors.badgeBg : colors.primary + '20' }]}>
+        <Ionicons name={iconInfo.name} size={20} color={iconInfo.color} />
       </View>
 
       <View style={styles.content}>
         <View style={styles.rowBetween}>
-          <CraveText variant="bodyBold" numberOfLines={1} style={styles.flexOne}>
+          <CraveText variant="bodyBold" numberOfLines={1} style={styles.flexOne} color={colors.primaryText}>
             {notification.title}
           </CraveText>
           <CraveText variant="caption" color={colors.mutedText}>
@@ -54,11 +57,12 @@ export const NotificationCard: React.FC<NotificationCardProps> = ({ notification
           </CraveText>
         </View>
 
-        <CraveText variant="body" color={colors.secondaryText} numberOfLines={2}>
+        <CraveText variant="body" color={colors.secondaryText} numberOfLines={2} style={styles.subtitle}>
           {notification.subtitle}
         </CraveText>
       </View>
 
+      <Ionicons name="chevron-forward" size={16} color={colors.mutedText} style={styles.chevron} />
       {!notification.read && <View style={[styles.unreadDot, { backgroundColor: colors.primary }]} />}
     </TouchableOpacity>
   );
@@ -68,23 +72,26 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 14,
+    padding: 14,
+    borderRadius: 16,
     borderWidth: 1,
-    marginBottom: 10,
+    marginBottom: 8,
     position: 'relative',
   },
   iconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 14,
   },
   content: {
     flex: 1,
-    gap: 2,
+    gap: 4,
+  },
+  subtitle: {
+    lineHeight: 18,
   },
   rowBetween: {
     flexDirection: 'row',
@@ -95,10 +102,15 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 8,
   },
+  chevron: {
+    marginLeft: 6,
+  },
   unreadDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    marginLeft: 8,
+    position: 'absolute',
+    top: 14,
+    right: 12,
   },
 });

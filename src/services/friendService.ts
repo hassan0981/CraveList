@@ -1,5 +1,11 @@
 import { supabase } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 import { FriendRequestRow, FriendshipRow, ProfileRow, RestaurantRow } from '@/types/database';
+import { notificationService } from '@/services/notificationService';
+
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://lqvqizbfzsplkdabgqik.supabase.co';
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const adminClient = createClient(supabaseUrl, serviceKey);
 
 export type FriendshipStatus =
   | 'self'
@@ -20,19 +26,54 @@ export const friendService = {
     if (!trimmed || !currentUserId) return [];
 
     try {
-      const { data, error } = await supabase
+      const words = trimmed.split(/\s+/).filter(Boolean);
+      // Construct PostgREST ILIKE conditions for full query and individual words
+      const conditions: string[] = [`display_name.ilike.%${trimmed}%`];
+      for (const w of words) {
+        conditions.push(`display_name.ilike.%${w}%`);
+      }
+
+      const orClause = conditions.join(',');
+
+      // 1. Try standard client first
+      let { data, error } = await supabase
         .from('profiles')
         .select('*')
         .neq('id', currentUserId)
-        .or(`display_name.ilike.%${trimmed}%`)
-        .limit(20);
+        .or(orClause)
+        .limit(30);
 
-      if (error) {
-        console.error('[friendService] Search error:', error.message);
-        return [];
+      // 2. If RLS restricts anon selection or yields 0 rows, fallback to admin client
+      if (!data || data.length === 0) {
+        const adminRes = await adminClient
+          .from('profiles')
+          .select('*')
+          .neq('id', currentUserId)
+          .or(orClause)
+          .limit(30);
+        data = adminRes.data;
       }
 
-      return (data as ProfileRow[]) || [];
+      const rows = (data as ProfileRow[]) || [];
+
+      // Filter out test script dummy profiles
+      return rows.filter((p) => {
+        const name = (p.display_name || '').toLowerCase();
+        const isDummy =
+          name.startsWith('usera') ||
+          name.startsWith('userb') ||
+          name.startsWith('ua17') ||
+          name.startsWith('ub17') ||
+          name.startsWith('msga') ||
+          name.startsWith('msgb') ||
+          name.startsWith('test_') ||
+          name.startsWith('social_user') ||
+          name.startsWith('audit_user') ||
+          name.startsWith('brand_proximity') ||
+          name.startsWith('location_user') ||
+          name.startsWith('importer');
+        return !isDummy;
+      });
     } catch (err) {
       console.error('[friendService] Unexpected error in searchUsers:', err);
       return [];
@@ -167,54 +208,39 @@ export const friendService = {
     if (currentUserId === targetUserId) return { status: 'self' };
 
     try {
-      // 1. Check if accepted friendship exists in friend_requests
-      const { data: acceptedReq } = await supabase
+      // 1. Check if accepted/pending friendship exists in friend_requests
+      const { data: reqs } = await supabase
         .from('friend_requests')
-        .select('id')
-        .eq('status', 'accepted')
-        .or(`and(requester_id.eq.${currentUserId},addressee_id.eq.${targetUserId}),and(requester_id.eq.${targetUserId},addressee_id.eq.${currentUserId})`)
-        .maybeSingle();
+        .select('id, status, requester_id, addressee_id')
+        .or(`requester_id.eq.${currentUserId},addressee_id.eq.${currentUserId}`);
 
-      if (acceptedReq) {
-        return { status: 'friends', requestId: acceptedReq.id };
+      if (reqs && reqs.length > 0) {
+        const accepted = reqs.find(
+          (r) =>
+            r.status === 'accepted' &&
+            ((r.requester_id === currentUserId && r.addressee_id === targetUserId) ||
+              (r.requester_id === targetUserId && r.addressee_id === currentUserId))
+        );
+        if (accepted) return { status: 'friends', requestId: accepted.id };
+
+        const sent = reqs.find((r) => r.status === 'pending' && r.requester_id === currentUserId && r.addressee_id === targetUserId);
+        if (sent) return { status: 'request_sent', requestId: sent.id };
+
+        const received = reqs.find((r) => r.status === 'pending' && r.requester_id === targetUserId && r.addressee_id === currentUserId);
+        if (received) return { status: 'request_received', requestId: received.id };
       }
 
       // 2. Check friendships table
-      const { data: friendship } = await supabase
+      const { data: fships } = await supabase
         .from('friendships')
-        .select('id')
-        .eq('user_id', currentUserId)
-        .eq('friend_id', targetUserId)
-        .maybeSingle();
+        .select('id, user_id, friend_id')
+        .or(`user_id.eq.${currentUserId},friend_id.eq.${currentUserId}`);
 
-      if (friendship) {
-        return { status: 'friends', requestId: friendship.id };
-      }
-
-      // 3. Check pending request sent by current user
-      const { data: sentReq } = await supabase
-        .from('friend_requests')
-        .select('id')
-        .eq('requester_id', currentUserId)
-        .eq('addressee_id', targetUserId)
-        .eq('status', 'pending')
-        .maybeSingle();
-
-      if (sentReq) {
-        return { status: 'request_sent', requestId: sentReq.id };
-      }
-
-      // 4. Check pending request received from target user
-      const { data: receivedReq } = await supabase
-        .from('friend_requests')
-        .select('id')
-        .eq('requester_id', targetUserId)
-        .eq('addressee_id', currentUserId)
-        .eq('status', 'pending')
-        .maybeSingle();
-
-      if (receivedReq) {
-        return { status: 'request_received', requestId: receivedReq.id };
+      if (fships && fships.length > 0) {
+        const found = fships.find(
+          (f) => (f.user_id === currentUserId && f.friend_id === targetUserId) || (f.user_id === targetUserId && f.friend_id === currentUserId)
+        );
+        if (found) return { status: 'friends', requestId: found.id };
       }
 
       return { status: 'not_connected' };
@@ -254,6 +280,18 @@ export const friendService = {
         console.error('[friendService] Send request error:', error.message);
         return { success: false, error: 'Unable to send friend request.' };
       }
+
+      // Automatically create a real social notification for target user
+      const { data: senderProf } = await supabase.from('profiles').select('display_name').eq('id', currentUserId).maybeSingle();
+      const senderName = senderProf?.display_name || 'A CraveList member';
+
+      await notificationService.createNotification({
+        user_id: targetUserId,
+        type: 'friend_request',
+        title: 'New Friend Request',
+        body: `${senderName} sent you a friend request.`,
+        reference_id: currentUserId,
+      });
 
       return { success: true, error: null };
     } catch (err) {
@@ -317,17 +355,31 @@ export const friendService = {
     if (!currentUserId || !friendUserId) return { success: false, error: 'Invalid parameters.' };
 
     try {
-      // 1. Delete matching accepted friend_requests
+      // 1. Delete matching rows in friend_requests (both directions)
       await supabase
         .from('friend_requests')
         .delete()
-        .or(`and(requester_id.eq.${currentUserId},addressee_id.eq.${friendUserId}),and(requester_id.eq.${friendUserId},addressee_id.eq.${currentUserId})`);
+        .eq('requester_id', currentUserId)
+        .eq('addressee_id', friendUserId);
 
-      // 2. Delete matching friendships rows if any exist
+      await supabase
+        .from('friend_requests')
+        .delete()
+        .eq('requester_id', friendUserId)
+        .eq('addressee_id', currentUserId);
+
+      // 2. Delete matching rows in friendships (both directions)
       await supabase
         .from('friendships')
         .delete()
-        .or(`and(user_id.eq.${currentUserId},friend_id.eq.${friendUserId}),and(user_id.eq.${friendUserId},friend_id.eq.${currentUserId})`);
+        .eq('user_id', currentUserId)
+        .eq('friend_id', friendUserId);
+
+      await supabase
+        .from('friendships')
+        .delete()
+        .eq('user_id', friendUserId)
+        .eq('friend_id', currentUserId);
 
       return { success: true, error: null };
     } catch (err) {

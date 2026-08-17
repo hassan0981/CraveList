@@ -73,6 +73,16 @@ export default function UserProfileScreen() {
     };
   }, [params.id, user]);
 
+  const handleRemoveFriend = async () => {
+    if (!user || !params.id || actionLoading) return;
+    setActionLoading(true);
+    const { success } = await friendService.removeFriend(user.id, params.id);
+    if (success) {
+      setFriendshipStatus('not_connected');
+    }
+    setActionLoading(false);
+  };
+
   const handleFriendshipAction = async () => {
     if (!user || !params.id || actionLoading) return;
 
@@ -180,25 +190,37 @@ export default function UserProfileScreen() {
             )}
 
             {friendshipStatus === 'friends' && (
-              <>
-                <AppButton
-                  title="Message"
-                  onPress={() => RootNavigation.toChat(profile.id, name)}
-                  variant="primary"
-                  icon="chatbubble-ellipses"
-                  fullWidth
-                  style={styles.flexOne}
-                />
+              <View style={{ gap: 10, width: '100%' }}>
+                <View style={styles.actionRow}>
+                  <AppButton
+                    title="Message"
+                    onPress={() => RootNavigation.toChat(profile.id, name)}
+                    variant="primary"
+                    icon="chatbubble-ellipses"
+                    fullWidth
+                    style={styles.flexOne}
+                  />
+
+                  <AppButton
+                    title="Shared Cravings"
+                    onPress={() => RootNavigation.toSharedCravings(name, profile.id)}
+                    variant="outline"
+                    icon="sparkles"
+                    fullWidth
+                    style={styles.flexOne}
+                  />
+                </View>
 
                 <AppButton
-                  title="Shared Cravings"
-                  onPress={() => RootNavigation.toSharedCravings(name, profile.id)}
+                  title={actionLoading ? 'Removing...' : 'Remove Friend'}
+                  onPress={handleRemoveFriend}
                   variant="outline"
-                  icon="sparkles"
+                  icon="person-remove"
+                  disabled={actionLoading}
                   fullWidth
-                  style={styles.flexOne}
+                  style={{ borderColor: colors.danger }}
                 />
-              </>
+              </View>
             )}
           </View>
         )}

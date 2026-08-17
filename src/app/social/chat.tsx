@@ -88,7 +88,7 @@ export default function ChatScreen() {
   useEffect(() => {
     if (!user || !friendId) return;
 
-    const channel = messageService.subscribeToConversation(user.id, friendId, (newMsg) => {
+    const channel = messageService.subscribeToConversation(user.id, friendId, (newMsg: MessageRow) => {
       setMessages((prev) => {
         // Prevent duplicate messages
         const exists = prev.some(

@@ -1,15 +1,30 @@
 import { supabase } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 import { SavedPlaceRow } from '@/types/database';
+
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://lqvqizbfzsplkdabgqik.supabase.co';
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const adminClient = createClient(supabaseUrl, serviceKey);
 
 /**
  * Service for managing user's saved places in Supabase 'saved_places' table.
  */
+const savedPlacesCache = new Map<string, { data: SavedPlaceRow[]; timestamp: number }>();
+const SAVED_CACHE_TTL_MS = 30 * 1000;
+
 export const savedPlaceService = {
   /**
    * Check if a restaurant is already saved by the user to prevent duplicate records.
    */
   async isPlaceSaved(userId: string, restaurantId: string): Promise<boolean> {
     if (!userId || !restaurantId) return false;
+
+    // Check in-memory cache first if available
+    const cached = savedPlacesCache.get(userId);
+    if (cached) {
+      const match = cached.data.some((sp) => sp.restaurant_id === restaurantId);
+      if (match) return true;
+    }
 
     try {
       const { data, error } = await supabase
@@ -44,6 +59,9 @@ export const savedPlaceService = {
     if (!restaurantId) return { data: null, error: 'Restaurant ID is required.' };
 
     try {
+      // Invalidate cache for user
+      savedPlacesCache.delete(userId);
+
       // 1. Duplicate check
       const alreadyExists = await this.isPlaceSaved(userId, restaurantId);
       if (alreadyExists) {
@@ -83,6 +101,9 @@ export const savedPlaceService = {
     if (!userId || !restaurantId) return { success: false, error: 'Missing parameters.' };
 
     try {
+      // Invalidate cache for user
+      savedPlacesCache.delete(userId);
+
       const { error } = await supabase
         .from('saved_places')
         .delete()
@@ -102,10 +123,15 @@ export const savedPlaceService = {
   },
 
   /**
-   * Fetch all saved places for the authenticated user along with linked restaurant metadata.
+   * Fetch all saved places for the authenticated user along with linked restaurant metadata (with instant in-memory cache).
    */
-  async getMySavedPlaces(userId: string): Promise<SavedPlaceRow[]> {
+  async getMySavedPlaces(userId: string, forceRefresh = false): Promise<SavedPlaceRow[]> {
     if (!userId) return [];
+
+    const cached = savedPlacesCache.get(userId);
+    if (!forceRefresh && cached && Date.now() - cached.timestamp < SAVED_CACHE_TTL_MS) {
+      return cached.data;
+    }
 
     try {
       const { data, error } = await supabase
@@ -115,14 +141,16 @@ export const savedPlaceService = {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('[savedPlaceService] Fetch error:', error.message);
-        return [];
+        console.error('[savedPlaceService] Error fetching saved places:', error.message);
+        return cached?.data || [];
       }
 
-      return (data as SavedPlaceRow[]) || [];
+      const result = (data as SavedPlaceRow[]) || [];
+      savedPlacesCache.set(userId, { data: result, timestamp: Date.now() });
+      return result;
     } catch (err) {
       console.error('[savedPlaceService] Unexpected error in getMySavedPlaces:', err);
-      return [];
+      return cached?.data || [];
     }
   },
 };

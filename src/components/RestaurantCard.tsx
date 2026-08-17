@@ -125,7 +125,7 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = ({
             <View style={[styles.statusBadge, { backgroundColor: colors.badgeBg }]}>
               <Ionicons name="bookmark" size={12} color={colors.primary} />
               <CraveText variant="badge" color={colors.primary} style={styles.badgeText}>
-                SAVED CRAVING
+                BRANCH SAVED ✓
               </CraveText>
             </View>
           ) : null}
@@ -134,12 +134,15 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = ({
         {onSaveToggle && (
           <TouchableOpacity
             onPress={onSaveToggle}
-            style={[styles.floatingSaveBtn, { backgroundColor: colors.elevatedSurface }]}
+            style={[
+              styles.floatingSaveBtn,
+              { backgroundColor: restaurant.saved ? colors.primary : colors.elevatedSurface },
+            ]}
           >
             <Ionicons
               name={restaurant.saved ? 'bookmark' : 'bookmark-outline'}
               size={18}
-              color={restaurant.saved ? colors.primary : colors.primaryText}
+              color={restaurant.saved ? '#FFFFFF' : colors.primaryText}
             />
           </TouchableOpacity>
         )}
@@ -159,6 +162,14 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = ({
           {restaurant.category} • {restaurant.priceLevel}
         </CraveText>
 
+        {/* Explicit Branch / Address Row */}
+        <View style={styles.rowItem}>
+          <Ionicons name="location-outline" size={14} color={colors.primary} />
+          <CraveText variant="caption" color={colors.primaryText} style={styles.distanceText} numberOfLines={1}>
+            Branch: {restaurant.address || 'Lahore Branch'} ({restaurant.distance})
+          </CraveText>
+        </View>
+
         {restaurant.personalNote && (
           <View style={[styles.personalNoteBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <CraveText variant="caption" color={colors.secondaryText} numberOfLines={2} style={styles.italicText}>
@@ -166,21 +177,6 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = ({
             </CraveText>
           </View>
         )}
-
-        <View style={styles.rowBetween}>
-          <View style={styles.rowItem}>
-            <Ionicons name="location-outline" size={14} color={colors.primary} />
-            <CraveText variant="caption" color={colors.primaryText} style={styles.distanceText}>
-              {restaurant.distance}
-            </CraveText>
-          </View>
-
-          {restaurant.recommendedBy && (
-            <CraveText variant="caption" color={colors.primarySoft}>
-              Saved by {restaurant.recommendedBy.split(' ')[0]}
-            </CraveText>
-          )}
-        </View>
       </View>
     </TouchableOpacity>
   );

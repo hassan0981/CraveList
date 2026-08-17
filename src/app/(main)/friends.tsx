@@ -1,19 +1,23 @@
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { AppButton } from '@/components/AppButton';
 import { CraveText } from '@/components/CraveText';
 import { EmptyState } from '@/components/EmptyState';
 import { FriendCard } from '@/components/FriendCard';
-import { PlanCard } from '@/components/PlanCard';
 import { SearchBar } from '@/components/SearchBar';
-import { mockPlans, UserFriend } from '@/constants/mockData';
-import { useTheme } from '@/context/ThemeContext';
+import { UserFriend } from '@/constants/mockData';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/context/ThemeContext';
 import { RootNavigation } from '@/navigation';
 import { friendService } from '@/services/friendService';
-import { FriendRequestRow, ProfileRow } from '@/types/database';
+import { messageService } from '@/services/messageService';
+import { planService } from '@/services/planService';
+import { FriendRequestRow, PlanRow, ProfileRow } from '@/types/database';
+import { Ionicons } from '@expo/vector-icons';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Image, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { notificationService } from '@/services/notificationService';
+import { useFocusEffect } from 'expo-router';
 
 export default function FriendsScreen() {
   const { colors } = useTheme();
@@ -26,7 +30,33 @@ export default function FriendsScreen() {
 
   const [friends, setFriends] = useState<ProfileRow[]>([]);
   const [pendingRequests, setPendingRequests] = useState<FriendRequestRow[]>([]);
+  const [pendingPlanInvites, setPendingPlanInvites] = useState<PlanRow[]>([]);
+  const [unreadMessageCounts, setUnreadMessageCounts] = useState<Record<string, number>>({});
   const [processingId, setProcessingId] = useState<string | null>(null);
+
+  const fetchSocialData = async () => {
+    if (!user) return;
+    try {
+      const [myFriends, requests, msgCounts, myPlans] = await Promise.all([
+        friendService?.getMyFriends ? friendService.getMyFriends(user.id) : Promise.resolve([]),
+        friendService?.getFriendRequests ? friendService.getFriendRequests(user.id) : Promise.resolve([]),
+        messageService?.getUnreadCountsByFriend ? messageService.getUnreadCountsByFriend(user.id) : Promise.resolve({}),
+        planService?.getMyPlans ? planService.getMyPlans(user.id) : Promise.resolve([]),
+      ]);
+      setFriends(myFriends || []);
+      setPendingRequests(requests || []);
+      setUnreadMessageCounts(msgCounts || {});
+
+      const pendingInvites = (myPlans || []).filter(
+        (p: PlanRow) =>
+          p.creator_id !== user.id &&
+          (p.members || []).some((m: any) => m.user_id === user.id && m.rsvp_status === 'pending')
+      );
+      setPendingPlanInvites(pendingInvites);
+    } catch (err) {
+      console.error('[FriendsScreen] Error refreshing social data:', err);
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -37,16 +67,29 @@ export default function FriendsScreen() {
         return;
       }
 
-      setLoading(true);
+      if (friends.length === 0) {
+        setLoading(true);
+      }
+
       try {
-        const [myFriends, requests] = await Promise.all([
-          friendService.getMyFriends(user.id),
-          friendService.getFriendRequests(user.id),
+        const [myFriends, requests, msgCounts, myPlans] = await Promise.all([
+          friendService?.getMyFriends ? friendService.getMyFriends(user.id) : Promise.resolve([]),
+          friendService?.getFriendRequests ? friendService.getFriendRequests(user.id) : Promise.resolve([]),
+          messageService?.getUnreadCountsByFriend ? messageService.getUnreadCountsByFriend(user.id) : Promise.resolve({}),
+          planService?.getMyPlans ? planService.getMyPlans(user.id) : Promise.resolve([]),
         ]);
 
         if (isMounted) {
-          setFriends(myFriends);
-          setPendingRequests(requests);
+          setFriends(myFriends || []);
+          setPendingRequests(requests || []);
+          setUnreadMessageCounts(msgCounts || {});
+
+          const pendingInvites = (myPlans || []).filter(
+            (p: PlanRow) =>
+              p.creator_id !== user.id &&
+              (p.members || []).some((m: any) => m.user_id === user.id && m.rsvp_status === 'pending')
+          );
+          setPendingPlanInvites(pendingInvites);
         }
       } catch (err) {
         console.error('[FriendsScreen] Error loading friends data:', err);
@@ -57,10 +100,25 @@ export default function FriendsScreen() {
 
     loadSocialData();
 
+    const unsubscribe = user
+      ? notificationService.subscribeToNotifications(user.id, () => {
+        if (isMounted) fetchSocialData();
+      })
+      : () => { };
+
     return () => {
       isMounted = false;
+      unsubscribe();
     };
   }, [user]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (user) {
+        fetchSocialData();
+      }
+    }, [user])
+  );
 
   // Perform live user search
   useEffect(() => {
@@ -128,12 +186,55 @@ export default function FriendsScreen() {
     id: p.id,
     name: p.display_name || 'CraveList Explorer',
     username: '@' + (p.display_name?.toLowerCase().replace(/\s+/g, '') || 'explorer'),
-    avatar: p.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
+    avatar:
+      p.avatar_url ||
+      `https://ui-avatars.com/api/?name=${encodeURIComponent(p.display_name || 'Explorer')}&background=FF385C&color=fff`,
     bio: p.bio || 'Food Explorer on CraveList',
     mutualSaved: 0,
     statusText: 'Connected on CraveList',
     lastActive: 'Active',
   }));
+
+  const [sentRequestUserIds, setSentRequestUserIds] = useState<Set<string>>(new Set());
+
+  const handleSendFriendRequest = async (targetUserId: string) => {
+    if (!user || processingId) return;
+
+    setProcessingId(targetUserId);
+    const { success } = await friendService.sendFriendRequest(user.id, targetUserId);
+    setProcessingId(null);
+
+    if (success) {
+      setSentRequestUserIds((prev) => new Set([...prev, targetUserId]));
+    }
+  };
+
+  const friendIdsSet = new Set(friends.map((f) => f.id));
+
+  const handleRemoveFriend = async (friendUserId: string) => {
+    if (!user || processingId) return;
+
+    setProcessingId(friendUserId);
+    setFriends((prev) => prev.filter((f) => f.id !== friendUserId));
+    await friendService.removeFriend(user.id, friendUserId);
+    setProcessingId(null);
+  };
+
+  const handleAcceptPlanRsvp = async (planId: string) => {
+    if (!user) return;
+    setProcessingId(planId);
+    await planService.updateRsvpStatus(planId, user.id, 'accepted');
+    await fetchSocialData();
+    setProcessingId(null);
+  };
+
+  const handleDeclinePlanRsvp = async (planId: string) => {
+    if (!user) return;
+    setProcessingId(planId);
+    await planService.updateRsvpStatus(planId, user.id, 'declined');
+    await fetchSocialData();
+    setProcessingId(null);
+  };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -165,6 +266,75 @@ export default function FriendsScreen() {
           />
         </View>
 
+        {/* Pending Plan Invitations Banner */}
+        {pendingPlanInvites.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <CraveText variant="h3" color={colors.primary}>
+                🍽️ Pending Dining Plan Invites ({pendingPlanInvites.length})
+              </CraveText>
+            </View>
+
+            {pendingPlanInvites.map((plan) => {
+              const hostName = plan.creator_profile?.display_name || 'A friend';
+              const spotName = plan.restaurant?.name || plan.title;
+
+              return (
+                <View
+                  key={plan.id}
+                  style={[styles.requestCard, { backgroundColor: colors.badgeBg, borderColor: colors.primary }]}
+                >
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={() => RootNavigation.toPlans()}
+                    style={styles.requestUserRow}
+                  >
+                    <View
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 20,
+                        backgroundColor: colors.primary,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Ionicons name="restaurant" size={20} color="#FFFFFF" />
+                    </View>
+                    <View style={styles.flexOne}>
+                      <CraveText variant="bodyBold">{plan.title}</CraveText>
+                      <CraveText variant="caption" color={colors.primarySoft}>
+                        {hostName} invited you to dinner at {spotName}!
+                      </CraveText>
+                    </View>
+                  </TouchableOpacity>
+
+                  <View style={styles.requestActions}>
+                    <AppButton
+                      title="Accept RSVP"
+                      onPress={() => handleAcceptPlanRsvp(plan.id)}
+                      variant="primary"
+                      size="small"
+                      disabled={processingId === plan.id}
+                      style={styles.flexOne}
+                      icon="checkmark"
+                    />
+                    <AppButton
+                      title="Decline"
+                      onPress={() => handleDeclinePlanRsvp(plan.id)}
+                      variant="outline"
+                      size="small"
+                      disabled={processingId === plan.id}
+                      style={styles.flexOne}
+                      icon="close"
+                    />
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
         {/* User Search Results Dropdown */}
         {searchQuery.trim().length > 0 && (
           <View style={[styles.searchResultsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -174,30 +344,61 @@ export default function FriendsScreen() {
             {searching ? (
               <ActivityIndicator size="small" color={colors.primary} />
             ) : searchResults.length > 0 ? (
-              searchResults.map((userItem) => (
-                <TouchableOpacity
-                  key={userItem.id}
-                  activeOpacity={0.85}
-                  onPress={() => RootNavigation.toUserProfile(userItem.id)}
-                  style={styles.searchUserRow}
-                >
-                  <Image
-                    source={{
-                      uri:
-                        userItem.avatar_url ||
-                        'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
-                    }}
-                    style={styles.searchAvatar}
-                  />
-                  <View style={styles.flexOne}>
-                    <CraveText variant="bodyBold">{userItem.display_name || 'CraveList User'}</CraveText>
-                    <CraveText variant="caption" color={colors.secondaryText}>
-                      {userItem.bio || 'Food Explorer'}
-                    </CraveText>
+              searchResults.map((userItem) => {
+                const isFriend = friendIdsSet.has(userItem.id);
+                const isRequestSent = sentRequestUserIds.has(userItem.id);
+
+                return (
+                  <View key={userItem.id} style={styles.searchUserRow}>
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      onPress={() => RootNavigation.toUserProfile(userItem.id)}
+                      style={styles.searchUserInfo}
+                    >
+                      <Image
+                        source={{
+                          uri:
+                            userItem.avatar_url ||
+                            `https://ui-avatars.com/api/?name=${encodeURIComponent(userItem.display_name || 'User')}&background=FF385C&color=fff`,
+                        }}
+                        style={styles.searchAvatar}
+                      />
+                      <View style={styles.flexOne}>
+                        <CraveText variant="bodyBold">{userItem.display_name || 'CraveList User'}</CraveText>
+                        <CraveText variant="caption" color={colors.secondaryText}>
+                          {userItem.bio || 'Food Explorer'}
+                        </CraveText>
+                      </View>
+                    </TouchableOpacity>
+
+                    {isFriend ? (
+                      <AppButton
+                        title="Chat"
+                        onPress={() => RootNavigation.toChat(userItem.id, userItem.display_name || 'Friend')}
+                        variant="secondary"
+                        size="small"
+                        icon="chatbubbles-outline"
+                      />
+                    ) : isRequestSent ? (
+                      <AppButton
+                        title="Sent"
+                        onPress={() => { }}
+                        variant="outline"
+                        size="small"
+                        disabled
+                      />
+                    ) : (
+                      <AppButton
+                        title="+ Add"
+                        onPress={() => handleSendFriendRequest(userItem.id)}
+                        variant="primary"
+                        size="small"
+                        disabled={processingId === userItem.id}
+                      />
+                    )}
                   </View>
-                  <Ionicons name="chevron-forward" size={16} color={colors.primary} />
-                </TouchableOpacity>
-              ))
+                );
+              })
             ) : (
               <CraveText variant="body" color={colors.secondaryText} align="center">
                 No users found matching "{searchQuery}"
@@ -218,7 +419,7 @@ export default function FriendsScreen() {
               const name = requester?.display_name || 'CraveList User';
               const avatar =
                 requester?.avatar_url ||
-                'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80';
+                `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=FF385C&color=fff`;
 
               return (
                 <View
@@ -268,22 +469,33 @@ export default function FriendsScreen() {
           <CraveText variant="h3">Upcoming Group Plans</CraveText>
           <TouchableOpacity onPress={() => RootNavigation.toPlans()}>
             <CraveText variant="caption" color={colors.primary}>
-              View All
+              Manage Plans →
             </CraveText>
           </TouchableOpacity>
         </View>
 
-        {mockPlans.map((plan) => (
-          <PlanCard
-            key={plan.id}
-            plan={plan}
-            onPress={() => RootNavigation.toPlans()}
-          />
-        ))}
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => RootNavigation.toPlans()}
+          style={[styles.searchResultsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.badgeBg, alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="calendar-outline" size={20} color={colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <CraveText variant="bodyBold">Plan a Meal Together</CraveText>
+              <CraveText variant="caption" color={colors.secondaryText}>
+                Schedule dining meetups with friends at your favorite spots.
+              </CraveText>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+          </View>
+        </TouchableOpacity>
 
         {/* Foodie Friends List Section */}
         <View style={styles.sectionHeader}>
-          <CraveText variant="h3">Foodie Friends ({formattedFriends.length})</CraveText>
+          <CraveText variant="h3">Foodie Friends ({friends.length})</CraveText>
         </View>
 
         {loading ? (
@@ -293,13 +505,17 @@ export default function FriendsScreen() {
               Loading your friends...
             </CraveText>
           </View>
-        ) : formattedFriends.length > 0 ? (
-          formattedFriends.map((friend) => (
+        ) : friends.length > 0 ? (
+          friends.map((friend) => (
             <FriendCard
               key={friend.id}
               friend={friend}
+              unreadCount={unreadMessageCounts[friend.id] || 0}
               onPress={() => RootNavigation.toUserProfile(friend.id)}
-              onChatPress={() => RootNavigation.toChat(friend.id, friend.name)}
+              onChatPress={() => {
+                setUnreadMessageCounts((prev) => ({ ...prev, [friend.id]: 0 }));
+                RootNavigation.toChat(friend.id, friend.display_name || 'Friend');
+              }}
             />
           ))
         ) : (
@@ -308,9 +524,7 @@ export default function FriendsScreen() {
             title="No friends yet"
             description="Find friends who share your cravings and discover spots together."
             actionTitle="Find Friends"
-            onActionPress={() => {
-              // Focus search bar
-            }}
+            onActionPress={() => setSearchQuery('a')}
           />
         )}
       </ScrollView>
@@ -349,8 +563,15 @@ const styles = StyleSheet.create({
   searchUserRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 12,
     paddingVertical: 6,
+  },
+  searchUserInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   searchAvatar: {
     width: 40,

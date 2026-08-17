@@ -59,7 +59,7 @@ export interface Memory {
 
 export interface NotificationItem {
   id: string;
-  type: 'proximity' | 'friend_save' | 'plan_invite' | 'memory_reminder';
+  type: 'proximity' | 'friend_save' | 'plan_invite' | 'memory_reminder' | 'friend_request' | 'plan_update';
   title: string;
   subtitle: string;
   time: string;

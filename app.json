@@ -1,21 +1,16 @@
 {
   "expo": {
-    "name": "CraveListFINAL",
+    "name": "CraveList",
     "slug": "CraveListFINAL",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "cravelistfinal",
-    "userInterfaceStyle": "automatic",
-    "ios": {
-      "icon": "./assets/expo.icon"
-    },
+    "userInterfaceStyle": "dark",
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#0D1117",
+        "foregroundImage": "./assets/images/icon.png"
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.anonymous.CraveListFINAL"
@@ -29,12 +24,33 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#0D1117",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "imageWidth": 120
         }
       ],
-      "@sentry/react-native"
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "CraveList lets you know when you are within 500 meters of a restaurant you saved.",
+          "locationWhenInUsePermission": "CraveList uses your location to discover saved cravings nearby.",
+          "isAndroidBackgroundLocationEnabled": true
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#FF385C"
+        }
+      ],
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "cravelist",
+          "project": "react-native"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

@@ -12,6 +12,7 @@ import { useAuth } from '@/context/AuthContext';
 import { RootNavigation } from '@/navigation';
 import { restaurantService, mapRowToRestaurant } from '@/services/restaurantService';
 import { visitService } from '@/services/visitService';
+import { cloudinaryService } from '@/services/cloudinaryService';
 
 const moodTags = ['Loved it', 'Good', 'Okay', 'Not for me'];
 
@@ -27,6 +28,7 @@ export default function VisitCheckinScreen() {
   const [selectedTag, setSelectedTag] = useState('Loved it');
   const [note, setNote] = useState('');
   const [photoUrl, setPhotoUrl] = useState<string | undefined>(undefined);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -45,7 +47,6 @@ export default function VisitCheckinScreen() {
         if (isMounted && row) {
           const mapped = mapRowToRestaurant(row);
           setRestaurant(mapped);
-          if (mapped.image) setPhotoUrl(mapped.image);
         }
       } catch (err) {
         console.error('[VisitCheckinScreen] Error loading restaurant:', err);
@@ -60,6 +61,26 @@ export default function VisitCheckinScreen() {
       isMounted = false;
     };
   }, [params.id]);
+
+  const handlePickFromGallery = async () => {
+    setUploadingPhoto(true);
+    const result = await cloudinaryService.pickImageFromGallery();
+    if (result) {
+      const uploaded = await cloudinaryService.uploadImage(result.uri, result.base64);
+      setPhotoUrl(uploaded);
+    }
+    setUploadingPhoto(false);
+  };
+
+  const handleTakePhoto = async () => {
+    setUploadingPhoto(true);
+    const result = await cloudinaryService.takePhotoWithCamera();
+    if (result) {
+      const uploaded = await cloudinaryService.uploadImage(result.uri, result.base64);
+      setPhotoUrl(uploaded);
+    }
+    setUploadingPhoto(false);
+  };
 
   const handleSubmit = async () => {
     if (!user || !restaurant || submitting) return;
@@ -164,15 +185,55 @@ export default function VisitCheckinScreen() {
               </View>
             </View>
 
-            {/* Photo Attachment Preview */}
-            {photoUrl && (
-              <View style={styles.section}>
-                <CraveText variant="subtitle">Memory Photo</CraveText>
+            {/* Photo Attachment & Upload Section */}
+            <View style={styles.section}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <CraveText variant="subtitle">Attach Memory Photo</CraveText>
+                {photoUrl && (
+                  <TouchableOpacity onPress={() => setPhotoUrl(undefined)}>
+                    <CraveText variant="caption" color={colors.danger}>
+                      Remove Photo
+                    </CraveText>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {photoUrl ? (
                 <View style={[styles.photoPreviewWrapper, { borderColor: colors.border }]}>
                   <Image source={{ uri: photoUrl }} style={styles.attachedImage} />
                 </View>
-              </View>
-            )}
+              ) : (
+                <View style={{ gap: 8, marginTop: 4 }}>
+                  {uploadingPhoto ? (
+                    <View style={[styles.uploadingBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                      <ActivityIndicator size="small" color={colors.primary} />
+                      <CraveText variant="caption" color={colors.secondaryText} style={{ marginTop: 6 }}>
+                        Uploading image to Cloudinary...
+                      </CraveText>
+                    </View>
+                  ) : (
+                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                      <AppButton
+                        title="Take Photo"
+                        onPress={handleTakePhoto}
+                        variant="outline"
+                        size="small"
+                        icon="camera"
+                        style={{ flex: 1 }}
+                      />
+                      <AppButton
+                        title="Upload Photo"
+                        onPress={handlePickFromGallery}
+                        variant="primary"
+                        size="small"
+                        icon="images"
+                        style={{ flex: 1 }}
+                      />
+                    </View>
+                  )}
+                </View>
+              )}
+            </View>
 
             {/* Personal Memory Note */}
             <View style={styles.section}>
@@ -296,5 +357,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 64,
     gap: 16,
+  },
+  uploadingBox: {
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

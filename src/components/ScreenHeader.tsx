@@ -26,11 +26,11 @@ export const ScreenHeader: React.FC<ScreenHeaderProps> = ({
           <IconButton icon="arrow-back" onPress={onBackPress} style={styles.backBtn} />
         )}
         <View style={styles.titleArea}>
-          <CraveText variant="h2" numberOfLines={1}>
+          <CraveText variant="h2" numberOfLines={1} ellipsizeMode="tail">
             {title}
           </CraveText>
           {subtitle && (
-            <CraveText variant="caption" color={colors.secondaryText} numberOfLines={1}>
+            <CraveText variant="caption" color={colors.secondaryText} numberOfLines={1} ellipsizeMode="tail">
               {subtitle}
             </CraveText>
           )}

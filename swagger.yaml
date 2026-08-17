@@ -1,0 +1,389 @@
+openapi: 3.0.3
+info:
+  title: CraveList Mobile REST API
+  description: >
+    Complete OpenAPI 3.0 Swagger Specification for CraveList Mobile Application.
+    Covers Authentication, User Profiles, Restaurants & Apify Fallback, Saved Cravings,
+    Memory Visits, Food Circle Friendships, Group Dining Plans, and Notifications.
+  version: 1.0.0
+  contact:
+    name: CraveList Engineering
+    email: support@cravelist.com
+servers:
+  - url: https://lqvqizbfzsplkdabgqik.supabase.co/rest/v1
+    description: Production Supabase PostgREST API
+  - url: http://localhost:8081
+    description: Local Expo Dev Server
+
+paths:
+  /auth/v1/signup:
+    post:
+      summary: Register new user account
+      description: Create a new user account using Email and Password.
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  example: user@example.com
+                password:
+                  type: string
+                  example: Password123!
+                data:
+                  type: object
+                  properties:
+                    full_name:
+                      type: string
+                      example: Hassan Javed
+      responses:
+        '200':
+          description: User registered successfully
+        '400':
+          description: Invalid parameters or user already exists
+
+  /auth/v1/token?grant_type=password:
+    post:
+      summary: User Login
+      description: Authenticate existing user with email and password.
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  example: user@example.com
+                password:
+                  type: string
+                  example: Password123!
+      responses:
+        '200':
+          description: Authentication successful, access token returned
+        '401':
+          description: Invalid email or password
+
+  /profiles:
+    get:
+      summary: Fetch User Profiles
+      tags:
+        - Profiles
+      parameters:
+        - name: id
+          in: query
+          schema:
+            type: string
+          description: Supabase User ID filter
+      responses:
+        '200':
+          description: Array of user profile records
+    patch:
+      summary: Update User Profile
+      tags:
+        - Profiles
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Profile'
+      responses:
+        '200':
+          description: Profile updated successfully
+
+  /restaurants:
+    get:
+      summary: Get All Restaurants
+      description: Query available dining spots in Lahore with optional category filtering.
+      tags:
+        - Restaurants
+      parameters:
+        - name: select
+          in: query
+          schema:
+            type: string
+            default: '*'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+      responses:
+        '200':
+          description: List of restaurant spots
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Restaurant'
+
+  /saved_places:
+    get:
+      summary: Get My Saved Cravings
+      tags:
+        - Saved Places
+      parameters:
+        - name: user_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of saved places linked to restaurant metadata
+    post:
+      summary: Save a Restaurant Craving
+      tags:
+        - Saved Places
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - user_id
+                - restaurant_id
+              properties:
+                user_id:
+                  type: string
+                restaurant_id:
+                  type: string
+                category:
+                  type: string
+                note:
+                  type: string
+      responses:
+        '201':
+          description: Restaurant saved to CraveList
+    delete:
+      summary: Unsave a Restaurant
+      tags:
+        - Saved Places
+      parameters:
+        - name: user_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: restaurant_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Saved craving removed
+
+  /visits:
+    get:
+      summary: Get Memory Visits Log
+      tags:
+        - Memory Check-Ins
+      parameters:
+        - name: user_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Chronological list of completed visits with photos and notes
+    post:
+      summary: Check In & Log Visit Memory
+      tags:
+        - Memory Check-Ins
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - user_id
+                - restaurant_id
+              properties:
+                user_id:
+                  type: string
+                restaurant_id:
+                  type: string
+                photo_url:
+                  type: string
+                note:
+                  type: string
+                rating:
+                  type: number
+      responses:
+        '201':
+          description: Visit logged successfully
+
+  /friendships:
+    get:
+      summary: Get Food Circle Friends
+      tags:
+        - Food Circle Friendships
+      parameters:
+        - name: user_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of connected friends
+    delete:
+      summary: Remove Friend
+      tags:
+        - Food Circle Friendships
+      parameters:
+        - name: user_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: friend_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Friendship removed
+
+  /plans:
+    get:
+      summary: Get Group Dining Meetup Plans
+      tags:
+        - Group Dining Plans
+      parameters:
+        - name: user_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Active group dining plans
+    post:
+      summary: Create Group Dining Plan
+      tags:
+        - Group Dining Plans
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - creator_id
+                - title
+                - restaurant_id
+                - scheduled_at
+              properties:
+                creator_id:
+                  type: string
+                title:
+                  type: string
+                restaurant_id:
+                  type: string
+                scheduled_at:
+                  type: string
+                  format: date-time
+                member_ids:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '201':
+          description: Group plan created and invitations sent
+
+  /https://api.cloudinary.com/v1_1/drfn0aw1t/image/upload:
+    post:
+      summary: Cloudinary REST Signed Image Upload
+      description: Upload avatar or memory check-in photo to Cloudinary CDN with SHA-1 signature.
+      tags:
+        - Cloudinary CDN
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+                - api_key
+                - timestamp
+                - signature
+              properties:
+                file:
+                  type: string
+                  format: binary
+                api_key:
+                  type: string
+                  example: "975422384962753"
+                timestamp:
+                  type: integer
+                  example: 1786993366
+                signature:
+                  type: string
+                  example: 4a2b3c4d5e6f
+      responses:
+        '200':
+          description: Image uploaded successfully, CDN secure URL returned
+
+components:
+  schemas:
+    Profile:
+      type: object
+      properties:
+        id:
+          type: string
+        display_name:
+          type: string
+        avatar_url:
+          type: string
+        bio:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    Restaurant:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+        address:
+          type: string
+        image_url:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

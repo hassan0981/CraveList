@@ -60,6 +60,40 @@ function formatAuthError(error: any): string {
   return msg || 'Something went wrong. Please try again.';
 }
 
+/**
+ * Ensure Supabase profiles table record exists for current authenticated user.
+ */
+async function ensureProfile(authUser: User) {
+  if (!authUser || !authUser.id) return;
+
+  try {
+    const { data: existing } = await supabase
+      .from('profiles')
+      .select('id, display_name')
+      .eq('id', authUser.id)
+      .maybeSingle();
+
+    const name =
+      authUser.user_metadata?.full_name ||
+      authUser.user_metadata?.name ||
+      authUser.email?.split('@')[0] ||
+      'CraveList Explorer';
+
+    if (!existing) {
+      await supabase.from('profiles').insert({
+        id: authUser.id,
+        display_name: name,
+        avatar_url: authUser.user_metadata?.avatar_url || null,
+        bio: 'Food Explorer on CraveList',
+      });
+    } else if (!existing.display_name && name) {
+      await supabase.from('profiles').update({ display_name: name }).eq('id', authUser.id);
+    }
+  } catch (err) {
+    console.error('[AuthContext] Ensure profile error:', err);
+  }
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -101,9 +135,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Central Supabase authentication listener
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, currentSession) => {
+    } = supabase.auth.onAuthStateChange(async (_event, currentSession) => {
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
+      if (currentSession?.user) {
+        // Pre-warm profile in database
+        await ensureProfile(currentSession.user);
+      }
       setLoading(false);
     });
 

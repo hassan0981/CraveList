@@ -29,7 +29,10 @@ export default function TrailScreen() {
         return;
       }
 
-      setLoading(true);
+      if (visits.length === 0 && savedPlaces.length === 0) {
+        setLoading(true);
+      }
+
       try {
         const [myVisits, mySaved] = await Promise.all([
           visitService.getMyVisits(user.id),

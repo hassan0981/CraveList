@@ -1,4 +1,3 @@
-import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://lqvqizbfzsplkdabgqik.supabase.co';
@@ -16,11 +15,29 @@ export interface NormalizedRestaurant {
   longitude: number;
 }
 
+function simpleHash128(str: string): string {
+  let h1 = 0xdeadbeef ^ 0, h2 = 0x41c6ce57 ^ 0, h3 = 0xfae9212f ^ 0, h4 = 0x933b9340 ^ 0;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+    h3 = Math.imul(h3 ^ ch, 3812015801);
+    h4 = Math.imul(h4 ^ ch, 3349156649);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h3 ^ (h3 >>> 13), 3266489909);
+  h3 = Math.imul(h3 ^ (h3 >>> 16), 2246822507) ^ Math.imul(h4 ^ (h4 >>> 13), 3266489909);
+  h4 = Math.imul(h4 ^ (h4 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+
+  const toHex = (n: number) => (n >>> 0).toString(16).padStart(8, '0');
+  return toHex(h1) + toHex(h2) + toHex(h3) + toHex(h4);
+}
+
 /**
  * Generate a deterministic UUID v4 string from any text seed.
  */
 function stringToUUID(str: string): string {
-  const hash = crypto.createHash('md5').update(str).digest('hex');
+  const hash = simpleHash128(str);
   return (
     hash.substring(0, 8) +
     '-' +

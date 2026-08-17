@@ -92,3 +92,38 @@ export interface MessageRow {
   sender_profile?: ProfileRow;
   receiver_profile?: ProfileRow;
 }
+
+export interface NotificationRow {
+  id: string;
+  user_id: string;
+  type: 'friend_request' | 'plan_invite' | 'plan_update' | 'proximity' | 'friend_save';
+  title: string;
+  body?: string | null;
+  reference_id?: string | null;
+  is_read?: boolean;
+  created_at?: string;
+}
+
+export interface PlanMemberRow {
+  id: string;
+  plan_id: string;
+  user_id: string;
+  rsvp_status: 'pending' | 'accepted' | 'declined';
+  created_at?: string;
+  user_profile?: ProfileRow;
+}
+
+export interface PlanRow {
+  id: string;
+  creator_id: string;
+  restaurant_id?: string | null;
+  title: string;
+  description?: string | null;
+  planned_at?: string | null;
+  status?: 'upcoming' | 'completed' | 'cancelled';
+  created_at?: string;
+  updated_at?: string;
+  creator_profile?: ProfileRow;
+  restaurant?: RestaurantRow;
+  members?: PlanMemberRow[];
+}

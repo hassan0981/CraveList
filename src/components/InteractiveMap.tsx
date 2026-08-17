@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CraveText } from '@/components/CraveText';
-import { mockRestaurants, Restaurant } from '@/constants/mockData';
+import { Restaurant } from '@/constants/mockData';
 import { useTheme } from '@/context/ThemeContext';
 
 interface InteractiveMapProps {
@@ -13,13 +13,19 @@ interface InteractiveMapProps {
 }
 
 export const InteractiveMap: React.FC<InteractiveMapProps> = ({
-  restaurants = mockRestaurants,
+  restaurants = [],
   onSelectRestaurant,
   height = 320,
   showControls = true,
 }) => {
   const { colors } = useTheme();
   const [selectedRest, setSelectedRest] = useState<Restaurant | null>(restaurants[0] || null);
+
+  useEffect(() => {
+    if (restaurants.length > 0) {
+      setSelectedRest(restaurants[0]);
+    }
+  }, [restaurants]);
 
   // Pin coordinate mappings to canvas percentage layout
   const pinPositions = [
@@ -123,15 +129,19 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
                 {selectedRest.name}
               </CraveText>
               <CraveText variant="caption" color={colors.secondaryText} numberOfLines={1}>
-                {selectedRest.category} • 📍 {selectedRest.distance}
+                Branch: {selectedRest.address || 'Lahore Spot'} • 📍 {selectedRest.distance}
               </CraveText>
             </View>
 
-            <View style={styles.calloutAction}>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => onSelectRestaurant && onSelectRestaurant(selectedRest)}
+              style={styles.calloutAction}
+            >
               <CraveText variant="caption" color={colors.primary}>
-                View Spot →
+                View Spot Details →
               </CraveText>
-            </View>
+            </TouchableOpacity>
           </View>
         </TouchableOpacity>
       )}

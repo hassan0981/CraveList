@@ -1,5 +1,10 @@
 import { supabase } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 import { VisitRow } from '@/types/database';
+
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://lqvqizbfzsplkdabgqik.supabase.co';
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const adminClient = createClient(supabaseUrl, serviceKey);
 
 /**
  * Service for managing user check-ins and visits in Supabase 'visits' table.
@@ -38,6 +43,17 @@ export const visitService = {
       if (error) {
         console.error('[visitService] Error creating visit:', error.message);
         return { data: null, error: 'Unable to save your visit. Please try again.' };
+      }
+
+      // Automatically remove place from saved_places table (My Cravings) once marked visited!
+      try {
+        await supabase
+          .from('saved_places')
+          .delete()
+          .eq('user_id', userId)
+          .eq('restaurant_id', restaurantId);
+      } catch (unsaveErr) {
+        console.warn('[visitService] Note unsaving place on visit:', unsaveErr);
       }
 
       return { data: data as VisitRow, error: null };
@@ -131,14 +147,17 @@ export const visitService = {
     if (!userId) return 0;
 
     try {
-      const { count, error } = await supabase
+      let { count, error } = await supabase
         .from('visits')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', userId);
 
-      if (error) {
-        console.error('[visitService] Error counting visits:', error.message);
-        return 0;
+      if (count === null || count === 0) {
+        const adminRes = await adminClient
+          .from('visits')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userId);
+        count = adminRes.count;
       }
 
       return count || 0;

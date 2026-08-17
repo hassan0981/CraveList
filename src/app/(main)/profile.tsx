@@ -1,21 +1,24 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { CraveText } from '@/components/CraveText';
 import { IconButton } from '@/components/IconButton';
 import { MemoryCard } from '@/components/MemoryCard';
 import { RestaurantCard } from '@/components/RestaurantCard';
 import { StatCard } from '@/components/StatCard';
-import { mockCurrentUser } from '@/constants/mockData';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import { RootNavigation } from '@/navigation';
 import { profileService } from '@/services/profileService';
 import { savedPlaceService } from '@/services/savedPlaceService';
 import { visitService } from '@/services/visitService';
+import { friendService } from '@/services/friendService';
+import { cloudinaryService } from '@/services/cloudinaryService';
 import { mapRowToRestaurant } from '@/services/restaurantService';
 import { ProfileRow, SavedPlaceRow, VisitRow } from '@/types/database';
 import { Restaurant, Memory } from '@/constants/mockData';
+import { useFocusEffect } from 'expo-router';
 
 export default function ProfileScreen() {
   const { colors } = useTheme();
@@ -23,49 +26,88 @@ export default function ProfileScreen() {
   const [activeTab, setActiveTab] = useState<'saved' | 'memories'>('saved');
   const [isSigningOut, setIsSigningOut] = useState(false);
 
-  const [loading, setLoading] = useState<boolean>(true);
   const [profile, setProfile] = useState<ProfileRow | null>(null);
+  const [loading, setLoading] = useState<boolean>(!profile);
+  const [uploadingAvatar, setUploadingAvatar] = useState<boolean>(false);
   const [savedPlaces, setSavedPlaces] = useState<SavedPlaceRow[]>([]);
   const [visits, setVisits] = useState<VisitRow[]>([]);
+  const [friendsCount, setFriendsCount] = useState<number>(0);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadRealData() {
-      if (!user) {
-        setLoading(false);
-        return;
-      }
-
-      setLoading(true);
-      try {
-        const [profData, savedData, visitsData] = await Promise.all([
-          profileService.getCurrentProfile(user.id, {
-            display_name: user.user_metadata?.full_name || user.user_metadata?.name,
-            avatar_url: user.user_metadata?.avatar_url,
-          }),
-          savedPlaceService.getMySavedPlaces(user.id),
-          visitService.getMyVisits(user.id),
-        ]);
-
-        if (isMounted) {
-          setProfile(profData);
-          setSavedPlaces(savedData);
-          setVisits(visitsData);
-        }
-      } catch (err) {
-        console.error('[ProfileScreen] Error loading Supabase profile/saved/visit data:', err);
-      } finally {
-        if (isMounted) setLoading(false);
+  const handleUpdateAvatarFromGallery = async () => {
+    if (!user) return;
+    setUploadingAvatar(true);
+    const result = await cloudinaryService.pickImageFromGallery();
+    if (result) {
+      const uploadedUrl = await cloudinaryService.uploadImage(result.uri, result.base64);
+      if (uploadedUrl) {
+        await profileService.updateProfile(user.id, { avatar_url: uploadedUrl });
+        setProfile((prev) => (prev ? { ...prev, avatar_url: uploadedUrl } : null));
       }
     }
+    setUploadingAvatar(false);
+  };
 
-    loadRealData();
+  const handleUpdateAvatarFromCamera = async () => {
+    if (!user) return;
+    setUploadingAvatar(true);
+    const result = await cloudinaryService.takePhotoWithCamera();
+    if (result) {
+      const uploadedUrl = await cloudinaryService.uploadImage(result.uri, result.base64);
+      if (uploadedUrl) {
+        await profileService.updateProfile(user.id, { avatar_url: uploadedUrl });
+        setProfile((prev) => (prev ? { ...prev, avatar_url: uploadedUrl } : null));
+      }
+    }
+    setUploadingAvatar(false);
+  };
 
-    return () => {
-      isMounted = false;
-    };
-  }, [user]);
+  useFocusEffect(
+    React.useCallback(() => {
+      let isMounted = true;
+
+      async function loadRealData() {
+        if (!user) {
+          setLoading(false);
+          return;
+        }
+
+        // Only show spinner if we don't have profile data loaded yet
+        if (!profile) setLoading(true);
+
+        try {
+          const [profData, savedData, visitsData, myFriends] = await Promise.all([
+            profileService.getCurrentProfile(user.id, {
+              display_name: user.user_metadata?.full_name || user.user_metadata?.name,
+              avatar_url: user.user_metadata?.avatar_url,
+            }),
+            savedPlaceService.getMySavedPlaces(user.id),
+            visitService.getMyVisits(user.id),
+            friendService.getMyFriends(user.id),
+          ]);
+
+          if (isMounted) {
+            const visitedRestIds = new Set(visitsData.map((v) => v.restaurant_id));
+            const unvisitedSavedPlaces = savedData.filter((sp) => !visitedRestIds.has(sp.restaurant_id));
+
+            setProfile(profData);
+            setSavedPlaces(unvisitedSavedPlaces);
+            setVisits(visitsData);
+            setFriendsCount(myFriends.length);
+          }
+        } catch (err) {
+          console.error('[ProfileScreen] Error loading profile stats:', err);
+        } finally {
+          if (isMounted) setLoading(false);
+        }
+      }
+
+      loadRealData();
+
+      return () => {
+        isMounted = false;
+      };
+    }, [user])
+  );
 
   // Extract display details from Supabase Profile + Auth session
   const displayName =
@@ -73,11 +115,14 @@ export default function ProfileScreen() {
     user?.user_metadata?.full_name ||
     user?.user_metadata?.name ||
     user?.email?.split('@')[0] ||
-    mockCurrentUser.name;
+    'Food Explorer';
 
-  const displayEmail = user?.email || mockCurrentUser.username;
-  const avatarUrl = profile?.avatar_url || user?.user_metadata?.avatar_url || mockCurrentUser.avatar;
-  const bioText = profile?.bio || mockCurrentUser.bio;
+  const displayEmail = user?.email || 'authenticated_user';
+  const avatarUrl =
+    profile?.avatar_url ||
+    user?.user_metadata?.avatar_url ||
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=FF385C&color=fff`;
+  const bioText = profile?.bio || 'Food Explorer on CraveList';
 
   // Convert Supabase saved_places rows to frontend Restaurant format
   const realSavedRestaurants: Restaurant[] = savedPlaces
@@ -130,7 +175,23 @@ export default function ProfileScreen() {
           <>
             {/* User Profile Hero */}
             <View style={styles.profileHero}>
-              <Image source={{ uri: avatarUrl }} style={styles.heroAvatar} />
+              <View style={styles.avatarWrapper}>
+                <Image source={{ uri: avatarUrl }} style={styles.heroAvatar} />
+                {uploadingAvatar ? (
+                  <View style={styles.avatarOverlay}>
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={handleUpdateAvatarFromGallery}
+                    style={[styles.cameraBadge, { backgroundColor: colors.primary }]}
+                  >
+                    <Ionicons name="camera" size={14} color="#FFFFFF" />
+                  </TouchableOpacity>
+                )}
+              </View>
+
               <CraveText variant="h1">{displayName}</CraveText>
               <CraveText variant="subtitle" color={colors.primary}>
                 {displayEmail}
@@ -138,6 +199,33 @@ export default function ProfileScreen() {
               <CraveText variant="body" align="center" color={colors.secondaryText} style={styles.bioText}>
                 {bioText}
               </CraveText>
+
+              {/* Avatar Action Buttons */}
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={handleUpdateAvatarFromGallery}
+                  disabled={uploadingAvatar}
+                  style={[styles.smallActionBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                >
+                  <Ionicons name="images-outline" size={14} color={colors.primary} />
+                  <CraveText variant="caption" color={colors.primaryText}>
+                    Change Avatar
+                  </CraveText>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={handleUpdateAvatarFromCamera}
+                  disabled={uploadingAvatar}
+                  style={[styles.smallActionBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                >
+                  <Ionicons name="camera-outline" size={14} color={colors.primary} />
+                  <CraveText variant="caption" color={colors.primaryText}>
+                    Take Photo
+                  </CraveText>
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Stats Row */}
@@ -159,7 +247,7 @@ export default function ProfileScreen() {
               />
               <StatCard
                 title="Friends"
-                value={mockCurrentUser.stats.friends}
+                value={friendsCount}
                 icon="people"
               />
             </View>
@@ -270,11 +358,46 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
+  avatarWrapper: {
+    position: 'relative',
+    marginBottom: 8,
+  },
   heroAvatar: {
     width: 90,
     height: 90,
     borderRadius: 45,
-    marginBottom: 8,
+  },
+  avatarOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 45,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cameraBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  smallActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
   },
   bioText: {
     maxWidth: 280,

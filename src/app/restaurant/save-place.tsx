@@ -102,7 +102,7 @@ export default function SavePlaceScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.header}>
-        <CraveText variant="h2">Save Place</CraveText>
+        <CraveText variant="h2">Save This Branch</CraveText>
         <TouchableOpacity onPress={() => RootNavigation.back()}>
           <Ionicons name="close" size={24} color={colors.primaryText} />
         </TouchableOpacity>
@@ -134,7 +134,7 @@ export default function SavePlaceScreen() {
                 <TextInput
                   value={note}
                   onChangeText={setNote}
-                  placeholder="e.g. Found on Instagram reel. Need to try the sourdough..."
+                  placeholder="e.g. Recommended by a friend. Must try the signature Zinger & Fries..."
                   placeholderTextColor={colors.mutedText}
                   multiline
                   numberOfLines={3}
@@ -146,77 +146,59 @@ export default function SavePlaceScreen() {
 
             {/* Priority Selector */}
             <View style={styles.section}>
-              <CraveText variant="subtitle">Priority Level</CraveText>
+              <CraveText variant="subtitle">Select Priority Level</CraveText>
               <View style={styles.priorityRow}>
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPress={() => setPriority('normal')}
-                  style={[
-                    styles.priorityOption,
-                    {
-                      backgroundColor: priority === 'normal' ? colors.surface : 'transparent',
-                      borderColor: priority === 'normal' ? colors.primary : colors.border,
-                    },
-                  ]}
-                >
-                  <Ionicons name="bookmark-outline" size={16} color={colors.primaryText} />
-                  <CraveText variant="bodyBold" color={colors.primaryText}>
-                    Normal Craving
-                  </CraveText>
-                </TouchableOpacity>
-
                 <TouchableOpacity
                   activeOpacity={0.8}
                   onPress={() => setPriority('high')}
                   style={[
                     styles.priorityOption,
                     {
-                      backgroundColor: priority === 'high' ? colors.badgeBg : 'transparent',
+                      backgroundColor: priority === 'high' ? colors.badgeBg : colors.surface,
                       borderColor: priority === 'high' ? colors.primary : colors.border,
                     },
                   ]}
                 >
                   <Ionicons name="flame" size={16} color={colors.primary} />
-                  <CraveText variant="bodyBold" color={colors.primary}>
-                    🔥 High Priority
+                  <CraveText variant="bodyBold" color={priority === 'high' ? colors.primary : colors.primaryText}>
+                    🔥 High
+                  </CraveText>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => setPriority('normal')}
+                  style={[
+                    styles.priorityOption,
+                    {
+                      backgroundColor: priority === 'normal' ? colors.badgeBg : colors.surface,
+                      borderColor: priority === 'normal' ? colors.primary : colors.border,
+                    },
+                  ]}
+                >
+                  <Ionicons name="bookmark" size={16} color={colors.primary} />
+                  <CraveText variant="bodyBold" color={priority === 'normal' ? colors.primary : colors.primaryText}>
+                    💛 Normal
                   </CraveText>
                 </TouchableOpacity>
               </View>
             </View>
 
-            {/* Category Tag */}
-            <View style={styles.section}>
-              <CraveText variant="subtitle">Category Tag</CraveText>
-              <View style={styles.tagsContainer}>
-                {categories.map((cat) => {
-                  const isSelected = selectedTag === cat;
-                  return (
-                    <TouchableOpacity
-                      key={cat}
-                      onPress={() => setSelectedTag(cat)}
-                      style={[
-                        styles.tagPill,
-                        {
-                          backgroundColor: isSelected ? colors.primary : colors.surface,
-                          borderColor: isSelected ? colors.primary : colors.border,
-                        },
-                      ]}
-                    >
-                      <CraveText
-                        variant="caption"
-                        color={isSelected ? '#FFFFFF' : colors.primaryText}
-                        style={styles.pillText}
-                      >
-                        {cat}
-                      </CraveText>
-                    </TouchableOpacity>
-                  );
-                })}
+            {/* Branch Summary */}
+            <View style={[styles.branchBadgeCard, { backgroundColor: colors.badgeBg, borderColor: colors.primary }]}>
+              <Ionicons name="location" size={18} color={colors.primary} />
+              <View style={styles.flexOne}>
+                <CraveText variant="bodyBold" color={colors.primary}>
+                  Saving Branch: {restaurant.name}
+                </CraveText>
+                <CraveText variant="caption" color={colors.primarySoft} numberOfLines={1}>
+                  {restaurant.address}
+                </CraveText>
               </View>
             </View>
 
             <AppButton
-              title={saving ? 'Saving...' : 'Save to My Cravings'}
+              title={saving ? 'Saving Branch...' : 'Save Branch'}
               onPress={handleSave}
               variant="primary"
               size="large"
@@ -232,7 +214,7 @@ export default function SavePlaceScreen() {
               <Ionicons name="checkmark-circle" size={56} color={colors.primary} />
             </View>
             <CraveText variant="h2" align="center">
-              ✓ Added to My Cravings
+              ✓ Added Branch to My Cravings
             </CraveText>
             <CraveText variant="body" align="center" color={colors.secondaryText}>
               We'll remind you whenever you wander near {restaurant.name}.
@@ -316,6 +298,17 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     gap: 6,
+  },
+  branchBadgeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 10,
+  },
+  flexOne: {
+    flex: 1,
   },
   tagsContainer: {
     flexDirection: 'row',

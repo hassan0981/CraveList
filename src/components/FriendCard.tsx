@@ -1,58 +1,77 @@
 import React from 'react';
-import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Image, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Avatar } from '@/components/Avatar';
 import { CraveText } from '@/components/CraveText';
-import { UserFriend } from '@/constants/mockData';
+import { IconButton } from '@/components/IconButton';
+import { ProfileRow } from '@/types/database';
 import { useTheme } from '@/context/ThemeContext';
 
 interface FriendCardProps {
-  friend: UserFriend;
-  onPress: () => void;
+  friend: ProfileRow;
+  unreadCount?: number;
+  onPress?: () => void;
   onChatPress?: () => void;
 }
 
-export const FriendCard: React.FC<FriendCardProps> = ({ friend, onPress, onChatPress }) => {
+export function FriendCard({
+  friend,
+  unreadCount = 0,
+  onPress,
+  onChatPress,
+}: FriendCardProps) {
   const { colors } = useTheme();
+
+  const displayName = friend.display_name || 'Foodie Friend';
+  const avatarUrl =
+    friend.avatar_url ||
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=FF385C&color=fff`;
 
   return (
     <TouchableOpacity
-      activeOpacity={0.8}
+      activeOpacity={0.85}
       onPress={onPress}
       style={[
         styles.container,
-        { backgroundColor: colors.cardBackground, borderColor: colors.border },
+        {
+          backgroundColor: colors.cardBackground,
+          borderColor: unreadCount > 0 ? colors.primary : colors.border,
+          borderWidth: unreadCount > 0 ? 1.5 : 1,
+        },
       ]}
     >
-      <Avatar source={friend.avatar} size={48} showOnlineStatus />
+      <Image source={{ uri: avatarUrl }} style={styles.avatar} />
 
-      <View style={styles.content}>
-        <CraveText variant="bodyBold" numberOfLines={1}>
-          {friend.name}
-        </CraveText>
-        <CraveText variant="caption" color={colors.secondaryText} numberOfLines={1}>
-          {friend.username} • {friend.lastActive}
-        </CraveText>
-
-        <View style={styles.statusRow}>
-          <Ionicons name="sparkles" size={12} color={colors.primary} />
-          <CraveText variant="caption" color={colors.primary} numberOfLines={1} style={styles.statusText}>
-            {friend.statusText}
+      <View style={styles.infoContainer}>
+        <View style={styles.nameRow}>
+          <CraveText variant="bodyBold" numberOfLines={1}>
+            {displayName}
           </CraveText>
+          {unreadCount > 0 && (
+            <View style={[styles.unreadBadge, { backgroundColor: colors.primary }]}>
+              <CraveText variant="caption" color="#FFFFFF" style={{ fontSize: 10, fontWeight: '700' }}>
+                💬 {unreadCount} New
+              </CraveText>
+            </View>
+          )}
         </View>
+        <CraveText variant="caption" color={colors.secondaryText} numberOfLines={1}>
+          {friend.bio || 'CraveList Explorer'}
+        </CraveText>
       </View>
 
-      {onChatPress && (
-        <TouchableOpacity
-          onPress={onChatPress}
-          style={[styles.chatBtn, { backgroundColor: colors.elevatedSurface, borderColor: colors.border }]}
-        >
-          <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.primaryText} />
-        </TouchableOpacity>
-      )}
+      <View style={styles.actions}>
+        <IconButton
+          icon="chatbubble-ellipses-outline"
+          onPress={() => {
+            if (onChatPress) onChatPress();
+            else if (onPress) onPress();
+          }}
+          color={unreadCount > 0 ? colors.primary : colors.primaryText}
+        />
+      </View>
     </TouchableOpacity>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
@@ -60,29 +79,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 12,
     borderRadius: 14,
-    borderWidth: 1,
     marginBottom: 10,
+    gap: 12,
   },
-  content: {
+  avatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+  },
+  infoContainer: {
     flex: 1,
-    marginLeft: 12,
     gap: 2,
   },
-  statusRow: {
+  nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 2,
+    gap: 6,
   },
-  statusText: {
-    marginLeft: 4,
+  unreadBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
   },
-  chatBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
+  actions: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 8,
   },
 });

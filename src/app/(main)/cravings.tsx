@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from 'expo-router';
 import { AppButton } from '@/components/AppButton';
 import { CraveText } from '@/components/CraveText';
 import { EmptyState } from '@/components/EmptyState';
@@ -12,8 +13,10 @@ import { useAuth } from '@/context/AuthContext';
 import { RootNavigation } from '@/navigation';
 import { savedPlaceService } from '@/services/savedPlaceService';
 import { visitService } from '@/services/visitService';
-import { mapRowToRestaurant } from '@/services/restaurantService';
-import { SavedPlaceRow, VisitRow } from '@/types/database';
+import { restaurantService, mapRowToRestaurant } from '@/services/restaurantService';
+import { RestaurantRow, SavedPlaceRow, VisitRow } from '@/types/database';
+
+import { brandService, BrandGroup, normalizeBrand } from '@/services/brandService';
 
 const filterTabs = ['All Cravings', 'Visited', 'Italian', 'Ramen', 'Bakery', 'Fast Food'];
 
@@ -26,71 +29,95 @@ export default function CravingsScreen() {
   const [loading, setLoading] = useState(true);
   const [savedPlaces, setSavedPlaces] = useState<SavedPlaceRow[]>([]);
   const [userVisits, setUserVisits] = useState<VisitRow[]>([]);
+  const [allRestaurants, setAllRestaurants] = useState<RestaurantRow[]>([]);
 
-  useEffect(() => {
-    let isMounted = true;
+  useFocusEffect(
+    useCallback(() => {
+      let isMounted = true;
 
-    async function loadMyCravings() {
-      if (!user) {
-        setLoading(false);
-        return;
-      }
-
-      setLoading(true);
-      try {
-        const [rows, visits] = await Promise.all([
-          savedPlaceService.getMySavedPlaces(user.id),
-          visitService.getMyVisits(user.id),
-        ]);
-
-        if (isMounted) {
-          setSavedPlaces(rows);
-          setUserVisits(visits);
+      async function loadMyCravings() {
+        if (!user) {
+          setLoading(false);
+          return;
         }
-      } catch (err) {
-        console.error('[CravingsScreen] Error fetching my saved places/visits:', err);
-      } finally {
-        if (isMounted) setLoading(false);
+
+        if (savedPlaces.length === 0 && userVisits.length === 0) {
+          setLoading(true);
+        }
+
+        try {
+          const [rows, visits, rests] = await Promise.all([
+            savedPlaceService.getMySavedPlaces(user.id),
+            visitService.getMyVisits(user.id),
+            restaurantService.getRestaurants(),
+          ]);
+
+          if (isMounted) {
+            const visitedRestIds = new Set(visits.map((v) => v.restaurant_id));
+            const unvisitedSaved = rows.filter((sp) => !visitedRestIds.has(sp.restaurant_id));
+            setSavedPlaces(unvisitedSaved);
+            setUserVisits(visits);
+            setAllRestaurants(rests);
+          }
+        } catch (err) {
+          console.error('[CravingsScreen] Error fetching my saved places/visits:', err);
+        } finally {
+          if (isMounted) setLoading(false);
+        }
       }
+
+      loadMyCravings();
+
+      return () => {
+        isMounted = false;
+      };
+    }, [user])
+  );
+
+  const savedSet = new Set(savedPlaces.map((sp) => sp.restaurant_id));
+
+  // Extract saved restaurant rows from joined savedPlaces query
+  const savedRestaurants = savedPlaces.filter((sp) => sp.restaurant).map((sp) => sp.restaurant!);
+  
+  // Combine allRestaurants with savedRestaurants to guarantee every saved spot is present
+  const combinedRestaurants = [...allRestaurants];
+  const existingIds = new Set(allRestaurants.map((r) => r.id));
+  for (const sRest of savedRestaurants) {
+    if (!existingIds.has(sRest.id)) {
+      combinedRestaurants.push(sRest);
+      existingIds.add(sRest.id);
     }
+  }
 
-    loadMyCravings();
+  // Derive saved brand identifiers
+  const savedBrandIds = new Set(
+    savedRestaurants.map((r) => normalizeBrand(r.name).brandId)
+  );
 
-    return () => {
-      isMounted = false;
-    };
-  }, [user]);
+  const brandGroups: BrandGroup[] = brandService.groupRestaurantsByBrand(combinedRestaurants, savedSet);
+  const savedBrandGroups = brandGroups.filter((bg) => bg.isSaved || savedBrandIds.has(bg.brandId));
 
-  const visitedSet = new Set(userVisits.map((v) => v.restaurant_id));
-
-  // Convert Supabase saved places rows to frontend Restaurant type
-  const cravingsList: Restaurant[] = savedPlaces
-    .filter((sp) => sp.restaurant)
-    .map((sp) => {
-      const rest = mapRowToRestaurant(sp.restaurant!, true);
-      rest.visited = visitedSet.has(sp.restaurant_id);
-      return rest;
-    });
-
-  const filteredList = cravingsList.filter((r) => {
+  const filteredBrands = savedBrandGroups.filter((bg) => {
     const matchesSearch =
-      r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      r.category.toLowerCase().includes(searchQuery.toLowerCase());
+      bg.brandName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      bg.category.toLowerCase().includes(searchQuery.toLowerCase());
 
     if (!matchesSearch) return false;
 
     if (activeFilter === 'All Cravings') return true;
-    if (activeFilter === 'Visited') return r.visited;
-    return r.category.toLowerCase().includes(activeFilter.toLowerCase());
+    return bg.category.toLowerCase().includes(activeFilter.toLowerCase());
   });
 
-  const handleToggleSave = async (restaurantId: string) => {
+  const handleUnsaveBrand = async (brand: BrandGroup) => {
     if (!user) return;
 
-    // Immediately update local UI list
-    setSavedPlaces((prev) => prev.filter((sp) => sp.restaurant_id !== restaurantId));
-    // Persist deletion to Supabase database
-    await savedPlaceService.unsavePlace(user.id, restaurantId);
+    // Remove saved places for all branches of this brand
+    const branchIds = new Set(brand.branches.map((b) => b.id));
+    setSavedPlaces((prev) => prev.filter((sp) => !branchIds.has(sp.restaurant_id)));
+
+    for (const branch of brand.branches) {
+      await savedPlaceService.unsavePlace(user.id, branch.id);
+    }
   };
 
   return (
@@ -100,12 +127,12 @@ export default function CravingsScreen() {
         <View style={styles.flexOne}>
           <CraveText variant="h1">My Cravings</CraveText>
           <CraveText variant="caption" color={colors.secondaryText}>
-            {cravingsList.length} PLACES YOU WANT TO TRY
+            {savedBrandGroups.length} BRANDS SAVED ({savedPlaces.length} LOCATIONS MONITORED)
           </CraveText>
         </View>
 
         <AppButton
-          title="+ Save a Place"
+          title="+ Save a Brand"
           onPress={() => RootNavigation.toSearchResults()}
           variant="primary"
           size="small"
@@ -117,7 +144,7 @@ export default function CravingsScreen() {
         <SearchBar
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholder="Search saved cravings..."
+          placeholder="Search saved brands..."
         />
       </View>
 
@@ -161,22 +188,46 @@ export default function CravingsScreen() {
               Loading your cravings from Supabase...
             </CraveText>
           </View>
-        ) : filteredList.length > 0 ? (
-          filteredList.map((rest) => (
-            <RestaurantCard
-              key={rest.id}
-              restaurant={rest}
-              layout="vertical"
-              onPress={() => RootNavigation.toRestaurantDetails(rest.id)}
-              onSaveToggle={() => handleToggleSave(rest.id)}
-            />
+        ) : filteredBrands.length > 0 ? (
+          filteredBrands.map((brand) => (
+            <View
+              key={brand.brandId}
+              style={[styles.brandCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              <View style={styles.brandRow}>
+                <View style={styles.brandInfo}>
+                  <CraveText variant="h2">{brand.brandName}</CraveText>
+                  <CraveText variant="caption" color={colors.secondaryText}>
+                    {brand.category} • Saved • {brand.branchCount} location{brand.branchCount > 1 ? 's' : ''} in Lahore
+                  </CraveText>
+                </View>
+
+                <AppButton
+                  title={`✓ ${brand.brandName} Saved`}
+                  onPress={() => handleUnsaveBrand(brand)}
+                  variant="secondary"
+                  size="small"
+                  icon="bookmark"
+                />
+              </View>
+
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => RootNavigation.toRestaurantDetails(brand.representativeRestaurantId)}
+                style={styles.detailsBtnRow}
+              >
+                <CraveText variant="caption" color={colors.primary}>
+                  View Brand Details & Locations →
+                </CraveText>
+              </TouchableOpacity>
+            </View>
           ))
         ) : (
           <EmptyState
             icon="bookmark-outline"
             title="Your craving list is empty"
-            description="Found a restaurant you want to try? Save it here and CraveList will remind you when you're nearby."
-            actionTitle="+ Save Your First Place"
+            description="Save your favorite restaurant brands and CraveList will notify you whenever you're within 500m of ANY location!"
+            actionTitle="+ Save Your First Brand"
             onActionPress={() => RootNavigation.toSearchResults()}
           />
         )}
@@ -228,5 +279,25 @@ const styles = StyleSheet.create({
   loadingWrapper: {
     paddingVertical: 40,
     alignItems: 'center',
+  },
+  brandCard: {
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 14,
+    gap: 12,
+  },
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  brandInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  detailsBtnRow: {
+    paddingTop: 4,
   },
 });

@@ -31,11 +31,19 @@ export function mapRowToRestaurant(row: RestaurantRow, isSaved: boolean = false)
  * Service for fetching and querying restaurant records from Supabase 'restaurants' table,
  * with server-side Apify Google Maps fallback.
  */
+let restaurantCache: RestaurantRow[] | null = null;
+let lastFetchTime = 0;
+const CACHE_TTL_MS = 30 * 1000; // 30 seconds cache
+
 export const restaurantService = {
   /**
-   * Fetch all restaurants from Supabase database.
+   * Fetch all restaurants from Supabase database (with instant in-memory cache).
    */
-  async getRestaurants(): Promise<RestaurantRow[]> {
+  async getRestaurants(forceRefresh = false): Promise<RestaurantRow[]> {
+    if (!forceRefresh && restaurantCache && Date.now() - lastFetchTime < CACHE_TTL_MS) {
+      return restaurantCache;
+    }
+
     try {
       const { data, error } = await supabase
         .from('restaurants')
@@ -45,13 +53,15 @@ export const restaurantService = {
 
       if (error) {
         console.error('[restaurantService] Error fetching restaurants:', error.message);
-        return [];
+        return restaurantCache || [];
       }
 
-      return (data as RestaurantRow[]) || [];
+      restaurantCache = (data as RestaurantRow[]) || [];
+      lastFetchTime = Date.now();
+      return restaurantCache;
     } catch (err) {
       console.error('[restaurantService] Unexpected error in getRestaurants:', err);
-      return [];
+      return restaurantCache || [];
     }
   },
 

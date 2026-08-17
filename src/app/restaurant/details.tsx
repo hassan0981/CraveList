@@ -14,6 +14,8 @@ import { RootNavigation } from '@/navigation';
 import { restaurantService, mapRowToRestaurant } from '@/services/restaurantService';
 import { savedPlaceService } from '@/services/savedPlaceService';
 import { visitService } from '@/services/visitService';
+import { locationService } from '@/services/locationService';
+import { normalizeBrand } from '@/services/brandService';
 import { VisitRow } from '@/types/database';
 
 export default function RestaurantDetailsScreen() {
@@ -25,6 +27,7 @@ export default function RestaurantDetailsScreen() {
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [isSaved, setIsSaved] = useState(false);
   const [userVisits, setUserVisits] = useState<VisitRow[]>([]);
+  const [realDistanceText, setRealDistanceText] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -55,6 +58,25 @@ export default function RestaurantDetailsScreen() {
       } finally {
         if (isMounted) setLoading(false);
       }
+
+      // Fetch location asynchronously without blocking restaurant rendering
+      try {
+        const coords = await locationService.getCurrentLocation();
+        if (isMounted && coords && params.id) {
+          const row = await restaurantService.getRestaurantById(params.id);
+          if (row && row.latitude && row.longitude) {
+            const meters = locationService.calculateDistance(
+              coords.latitude,
+              coords.longitude,
+              row.latitude,
+              row.longitude
+            );
+            setRealDistanceText(locationService.formatDistance(meters));
+          }
+        }
+      } catch (locErr) {
+        console.warn('[RestaurantDetailsScreen] Async location fetch failed:', locErr);
+      }
     }
 
     loadDetails();
@@ -71,10 +93,7 @@ export default function RestaurantDetailsScreen() {
       setIsSaved(false);
       await savedPlaceService.unsavePlace(user.id, restaurant.id);
     } else {
-      setIsSaved(true);
-      await savedPlaceService.savePlace(user.id, restaurant.id, {
-        category: restaurant.category,
-      });
+      RootNavigation.toSavePlace(restaurant.id);
     }
   };
 
@@ -161,7 +180,7 @@ export default function RestaurantDetailsScreen() {
             <View style={styles.metricItem}>
               <Ionicons name="location-outline" size={18} color={colors.primary} />
               <CraveText variant="caption" color={colors.primaryText}>
-                📍 {restaurant.address || restaurant.distance}
+                📍 {realDistanceText ? `${realDistanceText} • ` : ''}{restaurant.address || restaurant.distance}
               </CraveText>
             </View>
 
@@ -178,7 +197,7 @@ export default function RestaurantDetailsScreen() {
           {/* Action CTAs */}
           <View style={styles.ctaRow}>
             <AppButton
-              title={isSaved ? '✓ Saved in Cravings' : '♡ Save to Cravings'}
+              title={isSaved ? `✓ ${normalizeBrand(restaurant.name).brandName} Saved` : `♡ Save ${normalizeBrand(restaurant.name).brandName}`}
               onPress={() => RootNavigation.toSavePlace(restaurant.id)}
               variant={isSaved ? 'secondary' : 'primary'}
               icon={isSaved ? 'bookmark' : 'bookmark-outline'}
