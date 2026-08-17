@@ -55,7 +55,9 @@ export default function PlansScreen() {
     if (!user) return;
     try {
       const fetched = await planService.getMyPlans(user.id);
-      setPlans(fetched);
+      if (fetched && fetched.length > 0) {
+        setPlans(fetched);
+      }
     } catch (err) {
       console.error('[PlansScreen] Error fetching plans:', err);
     }

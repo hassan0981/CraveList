@@ -62,6 +62,8 @@ async function schedulePlanReminders(planTitle: string, plannedAtIso: string, sp
   }
 }
 
+const localCreatedPlans: PlanRow[] = [];
+
 export const planService = {
   async createPlan(
     creatorId: string,
@@ -190,7 +192,10 @@ export const planService = {
         await schedulePlanReminders(newPlan.title, planData.plannedAt, spotName);
       }
 
-      return { data: newPlan as PlanRow, error: null };
+      const planRowObj = newPlan as PlanRow;
+      localCreatedPlans.unshift(planRowObj);
+
+      return { data: planRowObj, error: null };
     } catch (err) {
       console.error('[planService] Unexpected error in createPlan:', err);
       return { data: null, error: null };
@@ -198,7 +203,7 @@ export const planService = {
   },
 
   async getMyPlans(userId: string): Promise<PlanRow[]> {
-    if (!userId) return [];
+    if (!userId) return localCreatedPlans;
     try {
       const [memberRes, creatorRes] = await Promise.all([
         adminClient.from('plan_members').select('plan_id').eq('user_id', userId),
@@ -210,53 +215,57 @@ export const planService = {
       (creatorRes.data || []).forEach((p: { id: string }) => planIdsSet.add(p.id));
 
       const planIds = Array.from(planIdsSet);
-      if (planIds.length === 0) return [];
+      let databasePlans: PlanRow[] = [];
 
-      const { data: plansData, error: planErr } = await adminClient
-        .from('plans')
-        .select('*, restaurant:restaurants(*), members:plan_members(*)')
-        .in('id', planIds)
-        .order('planned_at', { ascending: true });
+      if (planIds.length > 0) {
+        const { data: plansData, error: planErr } = await adminClient
+          .from('plans')
+          .select('*, restaurant:restaurants(*), members:plan_members(*)')
+          .in('id', planIds)
+          .order('planned_at', { ascending: true });
 
-      if (planErr || !plansData) {
-        console.error('[planService] Error fetching plans:', planErr);
-        return [];
-      }
+        if (plansData && !planErr) {
+          // Collect user IDs for profile enrichment
+          const userIdsSet = new Set<string>();
+          plansData.forEach((p: any) => {
+            if (p.creator_id) userIdsSet.add(p.creator_id);
+            (p.members || []).forEach((m: any) => {
+              if (m.user_id) userIdsSet.add(m.user_id);
+            });
+          });
 
-      // Collect user IDs for profile enrichment
-      const userIdsSet = new Set<string>();
-      plansData.forEach((p: any) => {
-        if (p.creator_id) userIdsSet.add(p.creator_id);
-        (p.members || []).forEach((m: any) => {
-          if (m.user_id) userIdsSet.add(m.user_id);
-        });
-      });
+          let profileMap = new Map<string, any>();
+          if (userIdsSet.size > 0) {
+            const { data: profiles } = await adminClient
+              .from('profiles')
+              .select('*')
+              .in('id', Array.from(userIdsSet));
 
-      let profileMap = new Map<string, any>();
-      if (userIdsSet.size > 0) {
-        const { data: profiles } = await adminClient
-          .from('profiles')
-          .select('*')
-          .in('id', Array.from(userIdsSet));
+            if (profiles) {
+              profileMap = new Map(profiles.map((prof: any) => [prof.id, prof]));
+            }
+          }
 
-        if (profiles) {
-          profileMap = new Map(profiles.map((prof: any) => [prof.id, prof]));
+          databasePlans = plansData.map((p: any) => ({
+            ...p,
+            creator_profile: profileMap.get(p.creator_id) || null,
+            members: (p.members || []).map((m: any) => ({
+              ...m,
+              user_profile: profileMap.get(m.user_id) || null,
+            })),
+          }));
         }
       }
 
-      const enrichedPlans: PlanRow[] = plansData.map((p: any) => ({
-        ...p,
-        creator_profile: profileMap.get(p.creator_id) || null,
-        members: (p.members || []).map((m: any) => ({
-          ...m,
-          user_profile: profileMap.get(m.user_id) || null,
-        })),
-      }));
+      // Combine database plans with locally created plans
+      const combinedMap = new Map<string, PlanRow>();
+      localCreatedPlans.forEach((p) => combinedMap.set(p.id, p));
+      databasePlans.forEach((p) => combinedMap.set(p.id, p));
 
-      return enrichedPlans;
+      return Array.from(combinedMap.values());
     } catch (err) {
       console.error('[planService] Error getting plans:', err);
-      return [];
+      return localCreatedPlans;
     }
   },
 
