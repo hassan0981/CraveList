@@ -22,8 +22,9 @@ import { useTheme } from '@/context/ThemeContext';
 import { RootNavigation } from '@/navigation';
 import { friendService } from '@/services/friendService';
 import { planService } from '@/services/planService';
+import { restaurantService } from '@/services/restaurantService';
 import { savedPlaceService } from '@/services/savedPlaceService';
-import { PlanRow, ProfileRow, SavedPlaceRow } from '@/types/database';
+import { PlanRow, ProfileRow, RestaurantRow, SavedPlaceRow } from '@/types/database';
 
 export default function PlansScreen() {
   const { colors } = useTheme();
@@ -40,10 +41,12 @@ export default function PlansScreen() {
   const [description, setDescription] = useState('');
   const [selectedSpotId, setSelectedSpotId] = useState<string | null>(null);
   const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>([]);
-  const [plannedTimeOption, setPlannedTimeOption] = useState<'tonight' | 'tomorrow' | 'weekend'>('tonight');
+  const [plannedTimeOption, setPlannedTimeOption] = useState<'tonight' | 'tomorrow' | 'saturday' | 'custom'>('tonight');
+  const [customDateString, setCustomDateString] = useState('');
+  const [spotSearchQuery, setSpotSearchQuery] = useState('');
 
   // Form options data
-  const [savedPlaces, setSavedPlaces] = useState<SavedPlaceRow[]>([]);
+  const [allAvailableSpots, setAllAvailableSpots] = useState<{ id: string; name: string }[]>([]);
   const [friendsList, setFriendsList] = useState<ProfileRow[]>([]);
 
   const fetchPlans = async () => {
@@ -98,14 +101,28 @@ export default function PlansScreen() {
     if (!user) return;
     setShowCreateModal(true);
     try {
-      const [places, friends] = await Promise.all([
+      const [places, friends, rests] = await Promise.all([
         savedPlaceService.getMySavedPlaces(user.id),
         friendService.getMyFriends(user.id),
+        restaurantService.getRestaurants(),
       ]);
-      setSavedPlaces(places || []);
+
       setFriendsList(friends || []);
-      if (places && places.length > 0 && !selectedSpotId) {
-        setSelectedSpotId(places[0].restaurant_id);
+
+      // Combine saved places and all database spots
+      const map = new Map<string, string>();
+      (places || []).forEach((p: SavedPlaceRow) => {
+        if (p.restaurant_id && p.restaurant?.name) map.set(p.restaurant_id, `📍 ${p.restaurant.name} (Saved)`);
+      });
+      (rests || []).forEach((r: RestaurantRow) => {
+        if (r.id && r.name && !map.has(r.id)) map.set(r.id, `🍽️ ${r.name}`);
+      });
+
+      const spotList = Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+      setAllAvailableSpots(spotList);
+
+      if (spotList.length > 0 && !selectedSpotId) {
+        setSelectedSpotId(spotList[0].id);
       }
     } catch (err) {
       console.error('[PlansScreen] Error loading modal form options:', err);
@@ -135,10 +152,15 @@ export default function PlansScreen() {
     } else if (plannedTimeOption === 'tomorrow') {
       plannedAt.setDate(plannedAt.getDate() + 1);
       plannedAt.setHours(19, 30, 0, 0);
-    } else if (plannedTimeOption === 'weekend') {
+    } else if (plannedTimeOption === 'saturday') {
       const daysUntilSaturday = (6 - plannedAt.getDay() + 7) % 7 || 7;
       plannedAt.setDate(plannedAt.getDate() + daysUntilSaturday);
       plannedAt.setHours(20, 0, 0, 0);
+    } else if (plannedTimeOption === 'custom' && customDateString.trim()) {
+      const parsed = new Date(customDateString.trim());
+      if (!isNaN(parsed.getTime())) {
+        plannedAt = parsed;
+      }
     }
 
     const { data: newPlan, error } = await planService.createPlan(user.id, {
@@ -159,12 +181,17 @@ export default function PlansScreen() {
       setTitle('');
       setDescription('');
       setSelectedFriendIds([]);
+      setCustomDateString('');
 
       // Optimistically prepend created plan to list immediately!
       setPlans((prev) => [newPlan, ...prev]);
       await fetchPlans();
     }
   };
+
+  const filteredSpots = allAvailableSpots.filter((spot) =>
+    spot.name.toLowerCase().includes(spotSearchQuery.trim().toLowerCase())
+  );
 
   const handleAcceptRsvp = async (planId: string) => {
     if (!user) return;
@@ -286,19 +313,26 @@ export default function PlansScreen() {
                 />
               </View>
 
-              {/* Form Field 2: Restaurant Spot */}
+              {/* Form Field 2: Restaurant Spot with Search Bar */}
               <View style={styles.formGroup}>
                 <CraveText variant="caption" color={colors.secondaryText}>
-                  CHOOSE DINING SPOT
+                  SEARCH & CHOOSE DINING SPOT
                 </CraveText>
-                {savedPlaces.length > 0 ? (
+                <TextInput
+                  style={[styles.input, { backgroundColor: colors.background, color: colors.primaryText, borderColor: colors.border }]}
+                  placeholder="🔍 Type to search restaurant (e.g. Howdy, Rina, Ramen)..."
+                  placeholderTextColor={colors.mutedText}
+                  value={spotSearchQuery}
+                  onChangeText={setSpotSearchQuery}
+                />
+                {filteredSpots.length > 0 ? (
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 4 }}>
-                    {savedPlaces.map((sp) => {
-                      const isSelected = selectedSpotId === sp.restaurant_id;
+                    {filteredSpots.map((spot) => {
+                      const isSelected = selectedSpotId === spot.id;
                       return (
                         <TouchableOpacity
-                          key={sp.id}
-                          onPress={() => setSelectedSpotId(sp.restaurant_id)}
+                          key={spot.id}
+                          onPress={() => setSelectedSpotId(spot.id)}
                           style={[
                             styles.chip,
                             {
@@ -308,7 +342,7 @@ export default function PlansScreen() {
                           ]}
                         >
                           <CraveText variant="caption" color={isSelected ? '#FFFFFF' : colors.primaryText}>
-                            📍 {sp.restaurant?.name || 'Spot'}
+                            {spot.name}
                           </CraveText>
                         </TouchableOpacity>
                       );
@@ -316,37 +350,50 @@ export default function PlansScreen() {
                   </ScrollView>
                 ) : (
                   <CraveText variant="caption" color={colors.mutedText}>
-                    Save places on home/search to pick from your saved list.
+                    No matching restaurant spots found for "{spotSearchQuery}".
                   </CraveText>
                 )}
               </View>
 
-              {/* Form Field 3: Time Frame */}
+              {/* Form Field 3: Custom Date & Time Frame */}
               <View style={styles.formGroup}>
                 <CraveText variant="caption" color={colors.secondaryText}>
-                  WHEN ARE YOU GOING?
+                  DATE & TIME OF MEETUP
                 </CraveText>
-                <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
-                  {(['tonight', 'tomorrow', 'weekend'] as const).map((opt) => (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 4 }}>
+                  {[
+                    { key: 'tonight', label: 'Tonight (8:00 PM)' },
+                    { key: 'tomorrow', label: 'Tomorrow (7:30 PM)' },
+                    { key: 'saturday', label: 'Saturday (8:00 PM)' },
+                    { key: 'custom', label: '✍️ Custom Date/Time' },
+                  ].map((opt) => (
                     <TouchableOpacity
-                      key={opt}
-                      onPress={() => setPlannedTimeOption(opt)}
+                      key={opt.key}
+                      onPress={() => setPlannedTimeOption(opt.key as any)}
                       style={[
                         styles.chip,
                         {
-                          flex: 1,
-                          alignItems: 'center',
-                          backgroundColor: plannedTimeOption === opt ? colors.primary : colors.background,
-                          borderColor: plannedTimeOption === opt ? colors.primary : colors.border,
+                          backgroundColor: plannedTimeOption === opt.key ? colors.primary : colors.background,
+                          borderColor: plannedTimeOption === opt.key ? colors.primary : colors.border,
                         },
                       ]}
                     >
-                      <CraveText variant="caption" color={plannedTimeOption === opt ? '#FFFFFF' : colors.primaryText}>
-                        {opt.toUpperCase()}
+                      <CraveText variant="caption" color={plannedTimeOption === opt.key ? '#FFFFFF' : colors.primaryText}>
+                        {opt.label}
                       </CraveText>
                     </TouchableOpacity>
                   ))}
-                </View>
+                </ScrollView>
+
+                {plannedTimeOption === 'custom' && (
+                  <TextInput
+                    style={[styles.input, { backgroundColor: colors.background, color: colors.primaryText, borderColor: colors.border, marginTop: 4 }]}
+                    placeholder="e.g. 2026-08-22 20:30 (YYYY-MM-DD HH:MM)"
+                    placeholderTextColor={colors.mutedText}
+                    value={customDateString}
+                    onChangeText={setCustomDateString}
+                  />
+                )}
               </View>
 
               {/* Form Field 4: Invite Friends */}
