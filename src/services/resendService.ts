@@ -50,21 +50,48 @@ export const resendService = {
   },
 
   /**
-   * Send Group Dining Meetup Email Invitation
+   * Send Welcome Email to New User
    */
-  async sendPlanInvitationEmail(toEmail: string, inviterName: string, planTitle: string, restaurantName: string) {
+  async sendWelcomeEmail(toEmail: string, userName: string = 'Hassan') {
+    const htmlTemplate = `
+      <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background-color: #0D1117; color: #FFFFFF; border-radius: 16px; border: 1px solid #30363D;">
+        <div style="text-align: center; padding-bottom: 20px; border-bottom: 1px solid #30363D;">
+          <h1 style="color: #FF385C; margin: 0; font-size: 28px; letter-spacing: -0.5px;">🍕 CraveList</h1>
+          <p style="color: #8B949E; margin-top: 4px; font-size: 14px;">Never miss a restaurant craving spot again</p>
+        </div>
+
+        <div style="padding: 24px 0; line-height: 1.6;">
+          <h2 style="color: #FFFFFF; font-size: 22px;">Welcome to CraveList, ${userName}! 🎉</h2>
+          <p style="color: #C9D1D9; font-size: 15px;">
+            We are thrilled to have you join our community of food lovers! With CraveList, discovering and saving your favorite dining spots in Lahore has never been easier.
+          </p>
+
+          <div style="background-color: #161B22; border: 1px solid #30363D; border-radius: 12px; padding: 16px; margin: 20px 0;">
+            <h3 style="color: #FF385C; margin-top: 0; font-size: 16px;">✨ What you can do right now:</h3>
+            <ul style="color: #C9D1D9; padding-left: 20px; margin-bottom: 0;">
+              <li><strong>📍 Proximity Alerts:</strong> Receive automatic 500m alerts when you pass saved spots.</li>
+              <li><strong>📸 Memory Check-ins:</strong> Save photos & memory notes of places you visit.</li>
+              <li><strong>👥 Group Dining Plans:</strong> Coordinate restaurant meetups with your Food Circle.</li>
+              <li><strong>🤖 CraveBot AI:</strong> Get personalized food recommendations powered by Gemini AI.</li>
+            </ul>
+          </div>
+
+          <p style="color: #C9D1D9; font-size: 15px;">
+            Start exploring and saving your top craving spots today!
+          </p>
+        </div>
+
+        <div style="text-align: center; padding-top: 20px; border-top: 1px solid #30363D; color: #8B949E; font-size: 12px;">
+          <p style="margin: 0;">Sent with ❤️ from CraveList Team</p>
+          <p style="margin: 4px 0 0 0;">© 2026 CraveList Inc. All rights reserved.</p>
+        </div>
+      </div>
+    `;
+
     return this.sendEmail({
       to: toEmail,
-      subject: `🍽️ ${inviterName} invited you to a CraveList Dining Meetup!`,
-      html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px; color: #111;">
-          <h2>You've been invited to a CraveList Meetup! 🎉</h2>
-          <p><strong>${inviterName}</strong> invited you to join <strong>"${planTitle}"</strong> at <strong>${restaurantName}</strong>.</p>
-          <p>Open your CraveList app to accept or decline the RSVP.</p>
-          <hr/>
-          <p style="font-size: 12px; color: #666;">CraveList App — Never miss a craving spot again.</p>
-        </div>
-      `,
+      subject: `🎉 Welcome to CraveList, ${userName}! Your Foodie Journey Begins`,
+      html: htmlTemplate,
     });
   },
 };

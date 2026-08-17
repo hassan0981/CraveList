@@ -6,6 +6,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { makeRedirectUri } from 'expo-auth-session';
 import { supabase } from '@/lib/supabase';
+import { resendService } from '@/services/resendService';
 
 // Ensure web browser auth session completes correctly on web/native
 WebBrowser.maybeCompleteAuthSession();
@@ -86,6 +87,11 @@ async function ensureProfile(authUser: User) {
         avatar_url: authUser.user_metadata?.avatar_url || null,
         bio: 'Food Explorer on CraveList',
       });
+
+      // Automatically dispatch Resend Welcome Email for new users
+      if (authUser.email) {
+        resendService.sendWelcomeEmail(authUser.email, name);
+      }
     } else if (!existing.display_name && name) {
       await supabase.from('profiles').update({ display_name: name }).eq('id', authUser.id);
     }
@@ -276,6 +282,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (data.session) {
         setSession(data.session);
         setUser(data.user);
+      }
+
+      if (data.user?.email) {
+        resendService.sendWelcomeEmail(data.user.email, fullName.trim() || 'Hassan');
       }
 
       return { error: null, requiresVerification };
