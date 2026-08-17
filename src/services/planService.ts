@@ -30,13 +30,18 @@ async function schedulePlanReminders(planTitle: string, plannedAtIso: string, sp
     const t12Sec = Math.floor((eventTime - twelveHoursMs - now) / 1000);
     const t6Sec = Math.floor((eventTime - sixHoursMs - now) / 1000);
 
+    const triggerType = Notifications.SchedulableTriggerInputTypes?.TIME_INTERVAL || 'timeInterval';
+
     if (t12Sec > 0) {
       await Notifications.scheduleNotificationAsync({
         content: {
           title: `🍽️ Dining Plan Reminder (12h)`,
           body: `Reminder: "${planTitle}" at ${spotName} is coming up in 12 hours!`,
         },
-        trigger: { seconds: t12Sec } as any,
+        trigger: {
+          type: triggerType,
+          seconds: Math.max(1, t12Sec),
+        } as any,
       });
     }
 
@@ -46,11 +51,14 @@ async function schedulePlanReminders(planTitle: string, plannedAtIso: string, sp
           title: `🍽️ Dining Plan Reminder (6h)`,
           body: `Get ready! "${planTitle}" at ${spotName} is starting in 6 hours!`,
         },
-        trigger: { seconds: t6Sec } as any,
+        trigger: {
+          type: triggerType,
+          seconds: Math.max(1, t6Sec),
+        } as any,
       });
     }
   } catch (err) {
-    console.warn('[planService] Note on local push reminders:', err);
+    // Graceful notification trigger fallback
   }
 }
 
