@@ -42,7 +42,9 @@ export default function PlansScreen() {
   const [selectedSpotId, setSelectedSpotId] = useState<string | null>(null);
   const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>([]);
   const [plannedTimeOption, setPlannedTimeOption] = useState<'tonight' | 'tomorrow' | 'saturday' | 'custom'>('tonight');
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState<'dinner' | 'prime' | 'late' | 'lunch' | 'custom'>('prime');
   const [customDateString, setCustomDateString] = useState('');
+  const [customTimeString, setCustomTimeString] = useState('');
   const [spotSearchQuery, setSpotSearchQuery] = useState('');
 
   // Form options data
@@ -147,19 +149,38 @@ export default function PlansScreen() {
     setCreating(true);
 
     let plannedAt = new Date();
+
+    // 1. Calculate Date
     if (plannedTimeOption === 'tonight') {
-      plannedAt.setHours(20, 0, 0, 0);
+      // today
     } else if (plannedTimeOption === 'tomorrow') {
       plannedAt.setDate(plannedAt.getDate() + 1);
-      plannedAt.setHours(19, 30, 0, 0);
     } else if (plannedTimeOption === 'saturday') {
       const daysUntilSaturday = (6 - plannedAt.getDay() + 7) % 7 || 7;
       plannedAt.setDate(plannedAt.getDate() + daysUntilSaturday);
-      plannedAt.setHours(20, 0, 0, 0);
     } else if (plannedTimeOption === 'custom' && customDateString.trim()) {
       const parsed = new Date(customDateString.trim());
       if (!isNaN(parsed.getTime())) {
         plannedAt = parsed;
+      }
+    }
+
+    // 2. Calculate Time
+    if (selectedTimeSlot === 'dinner') {
+      plannedAt.setHours(19, 0, 0, 0);
+    } else if (selectedTimeSlot === 'prime') {
+      plannedAt.setHours(20, 0, 0, 0);
+    } else if (selectedTimeSlot === 'late') {
+      plannedAt.setHours(21, 0, 0, 0);
+    } else if (selectedTimeSlot === 'lunch') {
+      plannedAt.setHours(13, 30, 0, 0);
+    } else if (selectedTimeSlot === 'custom' && customTimeString.trim()) {
+      const match = customTimeString.trim().match(/(\d{1,2}):(\d{2})/);
+      if (match) {
+        let hrs = parseInt(match[1], 10);
+        const mins = parseInt(match[2], 10);
+        if (customTimeString.toLowerCase().includes('pm') && hrs < 12) hrs += 12;
+        plannedAt.setHours(hrs, mins, 0, 0);
       }
     }
 
@@ -421,18 +442,49 @@ export default function PlansScreen() {
                   4. SELECT TIME ⏰
                 </CraveText>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 2 }}>
-                  {['7:00 PM (Dinner)', '8:00 PM (Prime)', '9:00 PM (Late)', '1:30 PM (Lunch)'].map((timeLabel) => (
-                    <View
-                      key={timeLabel}
-                      style={[styles.chip, { backgroundColor: colors.badgeBg, borderColor: colors.border }]}
-                    >
-                      <Ionicons name="time-outline" size={13} color={colors.primary} style={{ marginRight: 4 }} />
-                      <CraveText variant="caption" color={colors.primaryText}>
-                        {timeLabel}
-                      </CraveText>
-                    </View>
-                  ))}
+                  {[
+                    { key: 'dinner', label: '7:00 PM (Dinner)' },
+                    { key: 'prime', label: '8:00 PM (Prime)' },
+                    { key: 'late', label: '9:00 PM (Late)' },
+                    { key: 'lunch', label: '1:30 PM (Lunch)' },
+                    { key: 'custom', label: '✍️ Custom Time' },
+                  ].map((t) => {
+                    const isSelected = selectedTimeSlot === t.key;
+                    return (
+                      <TouchableOpacity
+                        key={t.key}
+                        onPress={() => setSelectedTimeSlot(t.key as any)}
+                        style={[
+                          styles.chip,
+                          {
+                            backgroundColor: isSelected ? colors.primary : colors.background,
+                            borderColor: isSelected ? colors.primary : colors.border,
+                          },
+                        ]}
+                      >
+                        <Ionicons
+                          name="time-outline"
+                          size={13}
+                          color={isSelected ? '#FFFFFF' : colors.primary}
+                          style={{ marginRight: 4 }}
+                        />
+                        <CraveText variant="caption" color={isSelected ? '#FFFFFF' : colors.primaryText}>
+                          {t.label}
+                        </CraveText>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </ScrollView>
+
+                {selectedTimeSlot === 'custom' && (
+                  <TextInput
+                    style={[styles.input, { backgroundColor: colors.background, color: colors.primaryText, borderColor: colors.border, marginTop: 4 }]}
+                    placeholder="Enter Time (e.g. 8:30 PM)"
+                    placeholderTextColor={colors.mutedText}
+                    value={customTimeString}
+                    onChangeText={setCustomTimeString}
+                  />
+                )}
               </View>
 
               {/* Form Section 5: Invite Friends */}

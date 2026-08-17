@@ -4,7 +4,7 @@ import { FriendRequestRow, FriendshipRow, ProfileRow, RestaurantRow } from '@/ty
 import { notificationService } from '@/services/notificationService';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://lqvqizbfzsplkdabgqik.supabase.co';
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const serviceKey = process.env.EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 const adminClient = serviceKey ? createClient(supabaseUrl, serviceKey) : supabase;
 
 export type FriendshipStatus =

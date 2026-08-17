@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import * as Notifications from 'expo-notifications';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://lqvqizbfzsplkdabgqik.supabase.co';
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const serviceKey = process.env.EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 const adminClient = serviceKey ? createClient(supabaseUrl, serviceKey) : supabase;
 
 const lastMarkedAllReadTimeMap: Record<string, number> = {};
