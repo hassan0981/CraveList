@@ -204,10 +204,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     };
 
-    const linkSubscription = Linking.addEventListener('url', handleDeepLink);
-    Linking.getInitialURL().then((url) => {
-      if (url) handleDeepLink({ url });
+    const linkSubscription = Linking.addEventListener('url', (event) => {
+      if (mounted) handleDeepLink(event);
     });
+
+    setTimeout(() => {
+      Linking.getInitialURL().then((url) => {
+        if (url && mounted) handleDeepLink({ url });
+      });
+    }, 0);
 
     return () => {
       mounted = false;
